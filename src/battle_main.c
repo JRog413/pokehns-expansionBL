@@ -4936,6 +4936,8 @@ u32 GetBattlerTotalSpeedStat(enum BattlerId battler, enum Ability ability, enum 
         speed = (GetParadoxBoostedStatId(battler) == STAT_SPEED) ? (speed * 150) / 100 : speed;
     else if (ability == ABILITY_UNBURDEN && gBattleMons[battler].volatiles.unburdenActive)
         speed *= 2;
+    else if (ability == ABILITY_OVERCHARGED)
+        speed *= 2;
 
     // player's badge boost
     if (!(gBattleTypeFlags & (BATTLE_TYPE_LINK | BATTLE_TYPE_RECORDED_LINK | BATTLE_TYPE_FRONTIER))
@@ -6097,6 +6099,9 @@ enum Type TrySetAteType(enum Move move, enum BattlerId battlerAtk, enum Ability 
         break;
     case ABILITY_GALVANIZE:
         ateType = TYPE_ELECTRIC;
+        break;
+    case ABILITY_DRAGONIZE:
+        ateType = TYPE_DRAGON;
         break;
     default:
         ateType = TYPE_NONE;

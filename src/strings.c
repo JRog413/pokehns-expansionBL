@@ -415,6 +415,7 @@ const u8 gText_EmptyString5[] = _("");
 const u8 gText_Events[] = _("EVENTS"); // Unused
 const u8 gText_Switch[] = _("SWITCH");
 const u8 gText_PkmnInfo[] = _("POKéMON INFO");
+const u8 gText_PkmnTraits[] = _("EQUIPMENT");
 const u8 gText_PkmnSkills[] = _("POKéMON SKILLS");
 const u8 gText_BattleMoves[] = _("BATTLE MOVES");
 const u8 gText_ContestMoves[] = _("CONTEST MOVES");

@@ -64,7 +64,7 @@
 #define PSS_LABEL_WINDOW_PROMPT_UTILITY 4
 #define PSS_LABEL_WINDOW_PROMPT_INFO 5 // unused
 #define PSS_LABEL_WINDOW_PROMPT_SWITCH 6 // unused
-#define PSS_LABEL_WINDOW_UNUSED1 7
+#define PSS_LABEL_WINDOW_TRAITS_TITLE 7
 
 // Info screen
 #define PSS_LABEL_WINDOW_POKEMON_INFO_RENTAL 8
@@ -94,7 +94,7 @@
 #define PSS_DATA_WINDOW_INFO_MEMO 3
 
 // Dynamic fields for the Pokémon Skills page
-#define PSS_DATA_WINDOW_SKILLS_HELD_ITEM 0
+#define PSS_DATA_WINDOW_SKILLS_RESERVED 0 // formerly held item display; reserved for a future ultimate ability charge bar
 #define PSS_DATA_WINDOW_SKILLS_RIBBON_COUNT 1
 #define PSS_DATA_WINDOW_SKILLS_STATS_LEFT 2 // HP, Attack, Defense
 #define PSS_DATA_WINDOW_SKILLS_STATS_RIGHT 3 // Sp. Attack, Sp. Defense, Speed
@@ -160,6 +160,9 @@ static EWRAM_DATA struct PokemonSummaryScreenData
         u16 spdef; // 0x2A
         u16 speed; // 0x2C
         enum Item item; // 0x2E
+        enum Item itemSlot2;
+        enum Item itemSlot3;
+        enum Item itemSlot4;
         u16 friendship; // 0x30
         u8 OTGender; // 0x32
         u8 nature; // 0x33
@@ -273,6 +276,9 @@ static void PrintMonOTName(void);
 static void PrintMonOTID(void);
 static void PrintMonAbilityName(void);
 static void PrintMonAbilityDescription(void);
+static void PrintTraits(void);
+static void Task_PrintTraits(u8);
+static void PrintMonItemSlot(u8 slotIndex);
 static void BufferMonTrainerMemo(void);
 static void PrintMonTrainerMemo(void);
 static void BufferNatureString(void);
@@ -285,7 +291,6 @@ static void PrintEggOTID(void);
 static void PrintEggState(void);
 static void PrintEggMemo(void);
 static void Task_PrintSkillsPage(u8);
-static void PrintHeldItemName(void);
 static void PrintSkillsPageText(void);
 static void PrintRibbonCount(void);
 static void BufferLeftColumnStats(void);
@@ -501,11 +506,11 @@ static const struct WindowTemplate sSummaryTemplate[] =
         .paletteNum = 7,
         .baseBlock = 121,
     },
-    [PSS_LABEL_WINDOW_UNUSED1] = {
+    [PSS_LABEL_WINDOW_TRAITS_TITLE] = {
         .bg = 0,
-        .tilemapLeft = 11,
-        .tilemapTop = 4,
-        .width = 0,
+        .tilemapLeft = 0,
+        .tilemapTop = 0,
+        .width = 11,
         .height = 2,
         .paletteNum = 6,
         .baseBlock = 137,
@@ -620,6 +625,47 @@ static const struct WindowTemplate sSummaryTemplate[] =
     },
     [PSS_LABEL_WINDOW_END] = DUMMY_WIN_TEMPLATE
 };
+// 4 stacked item-slot windows for the Traits page (slot index 0-3, matching
+// PrintMonItemSlot's slotIndex, which maps to item slots 1-4).
+static const struct WindowTemplate sPageTraitsTemplate[] =
+{
+    [0] = {
+        .bg = 0,
+        .tilemapLeft = 11,
+        .tilemapTop = 4,
+        .width = 18,
+        .height = 4,
+        .paletteNum = 6,
+        .baseBlock = 467,
+    },
+    [1] = {
+        .bg = 0,
+        .tilemapLeft = 11,
+        .tilemapTop = 8,
+        .width = 18,
+        .height = 4,
+        .paletteNum = 6,
+        .baseBlock = 539,
+    },
+    [2] = {
+        .bg = 0,
+        .tilemapLeft = 11,
+        .tilemapTop = 12,
+        .width = 18,
+        .height = 4,
+        .paletteNum = 6,
+        .baseBlock = 611,
+    },
+    [3] = {
+        .bg = 0,
+        .tilemapLeft = 11,
+        .tilemapTop = 16,
+        .width = 18,
+        .height = 4,
+        .paletteNum = 6,
+        .baseBlock = 683,
+    },
+};
 static const struct WindowTemplate sPageInfoTemplate[] =
 {
     [PSS_DATA_WINDOW_INFO_ORIGINAL_TRAINER] = {
@@ -661,7 +707,7 @@ static const struct WindowTemplate sPageInfoTemplate[] =
 };
 static const struct WindowTemplate sPageSkillsTemplate[] =
 {
-    [PSS_DATA_WINDOW_SKILLS_HELD_ITEM] = {
+    [PSS_DATA_WINDOW_SKILLS_RESERVED] = {
         .bg = 0,
         .tilemapLeft = 10,
         .tilemapTop = 4,
@@ -762,6 +808,7 @@ static const u8 sButtons_Gfx[][4 * TILE_SIZE_4BPP] = {
 static void (*const sTextPrinterFunctions[])(void) =
 {
     [PSS_PAGE_INFO] = PrintInfoPageText,
+    [PSS_PAGE_TRAITS] = PrintTraits,
     [PSS_PAGE_SKILLS] = PrintSkillsPageText,
     [PSS_PAGE_BATTLE_MOVES] = PrintBattleMoves,
     [PSS_PAGE_CONTEST_MOVES] = PrintContestMoves
@@ -770,6 +817,7 @@ static void (*const sTextPrinterFunctions[])(void) =
 static const TaskFunc sTextPrinterTasks[] =
 {
     [PSS_PAGE_INFO] = Task_PrintInfoPage,
+    [PSS_PAGE_TRAITS] = Task_PrintTraits,
     [PSS_PAGE_SKILLS] = Task_PrintSkillsPage,
     [PSS_PAGE_BATTLE_MOVES] = Task_PrintBattleMoves,
     [PSS_PAGE_CONTEST_MOVES] = Task_PrintContestMoves
@@ -1611,6 +1659,10 @@ static bool8 DecompressGraphics(void)
         LoadSpritePalette(&gSpritePal_CategoryIcons);
         LoadCompressedSpriteSheet(&sSpriteSheet_FriendshipIcon);
         LoadSpritePalette(&sSpritePal_FriendshipIcon);
+        sMonSummaryScreen->switchCounter++;
+        break;
+    case 13:
+        DecompressDataWithHeaderWram(gSummaryPage_Traits_Tilemap, sMonSummaryScreen->bgTilemapBuffers[PSS_PAGE_TRAITS][1]);
         sMonSummaryScreen->switchCounter = 0;
         return TRUE;
     }
@@ -1652,6 +1704,9 @@ static bool8 ExtractMonDataToSummaryStruct(struct Pokemon *mon)
         sum->level = GetMonData(mon, MON_DATA_LEVEL);
         sum->abilityNum = GetMonData(mon, MON_DATA_ABILITY_NUM);
         sum->item = GetMonData(mon, MON_DATA_HELD_ITEM);
+        sum->itemSlot2 = GetMonData(mon, MON_DATA_HELD_ITEM_SLOT2);
+        sum->itemSlot3 = GetMonData(mon, MON_DATA_HELD_ITEM_SLOT3);
+        sum->itemSlot4 = GetMonData(mon, MON_DATA_HELD_ITEM_SLOT4);
         sum->pid = GetMonData(mon, MON_DATA_PERSONALITY);
         sum->sanity = GetMonData(mon, MON_DATA_SANITY_IS_BAD_EGG);
 
@@ -3514,6 +3569,7 @@ static void PrintPageNamesAndStats(void)
     int statsXPos;
 
     PrintTextOnWindow(PSS_LABEL_WINDOW_POKEMON_INFO_TITLE, gText_PkmnInfo, 2, 1, 0, 1);
+    PrintTextOnWindow(PSS_LABEL_WINDOW_TRAITS_TITLE, gText_PkmnTraits, 2, 1, 0, 1);
     PrintTextOnWindow(PSS_LABEL_WINDOW_POKEMON_SKILLS_TITLE, gText_PkmnSkills, 2, 1, 0, 1);
     PrintTextOnWindow(PSS_LABEL_WINDOW_BATTLE_MOVES_TITLE, gText_BattleMoves, 2, 1, 0, 1);
     PrintTextOnWindow(PSS_LABEL_WINDOW_CONTEST_MOVES_TITLE, gText_ContestMoves, 2, 1, 0, 1);
@@ -3555,6 +3611,7 @@ static void PutPageWindowTilemaps(u8 page)
     u8 i;
 
     ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_TITLE);
+    ClearWindowTilemap(PSS_LABEL_WINDOW_TRAITS_TITLE);
     ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_TITLE);
     ClearWindowTilemap(PSS_LABEL_WINDOW_BATTLE_MOVES_TITLE);
     ClearWindowTilemap(PSS_LABEL_WINDOW_CONTEST_MOVES_TITLE);
@@ -3566,6 +3623,9 @@ static void PutPageWindowTilemaps(u8 page)
         if (InBattleFactory() == TRUE || InSlateportBattleTent() == TRUE)
             PutWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_RENTAL);
         PutWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_TYPE);
+        break;
+    case PSS_PAGE_TRAITS:
+        PutWindowTilemap(PSS_LABEL_WINDOW_TRAITS_TITLE);
         break;
     case PSS_PAGE_SKILLS:
         PutWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_TITLE);
@@ -3618,6 +3678,8 @@ static void ClearPageWindowTilemaps(u8 page)
             ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_RENTAL);
         ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_TYPE);
         ClearWindowTilemap(PSS_LABEL_WINDOW_PROMPT_RELEARN);
+        break;
+    case PSS_PAGE_TRAITS:
         break;
     case PSS_PAGE_SKILLS:
         ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_STATS_LEFT);
@@ -3778,6 +3840,106 @@ static void PrintMonAbilityDescription(void)
 {
     enum Ability ability = GetAbilityBySpecies(sMonSummaryScreen->summary.species, sMonSummaryScreen->summary.abilityNum);
     PrintTextOnWindow(AddWindowFromTemplateList(sPageInfoTemplate, PSS_DATA_WINDOW_INFO_ABILITY), gAbilitiesInfo[ability].description, 0, 17, 0, 0);
+}
+
+static const u8 sText_ItemSlotUnlockLevel[] = _("Lvl. ");
+static const u8 sText_ItemSlotShinyOnly[] = _("Exclusive to Shiny Pokemon");
+
+static void PrintTraits(void)
+{
+    PrintMonItemSlot(0);
+    PrintMonItemSlot(1);
+    PrintMonItemSlot(2);
+    PrintMonItemSlot(3);
+}
+
+static void Task_PrintTraits(u8 taskId)
+{
+    s16 *data = gTasks[taskId].data;
+
+    switch (data[0])
+    {
+    case 1:
+        PrintMonItemSlot(0);
+        break;
+    case 2:
+        PrintMonItemSlot(1);
+        break;
+    case 3:
+        PrintMonItemSlot(2);
+        break;
+    case 4:
+        PrintMonItemSlot(3);
+        break;
+    case 5:
+        DestroyTask(taskId);
+        return;
+    }
+    data[0]++;
+}
+
+// slotIndex is 0-3, mapping to item slots 1-4 (slot 1 is always unlocked, the
+// vanilla held item; slots 2-4 are the extra slots added by the 4-item-slot system).
+static void PrintMonItemSlot(u8 slotIndex)
+{
+    struct PokeSummary *sum = &sMonSummaryScreen->summary;
+    u32 slotNum = slotIndex + 1;
+    enum Item item = ITEM_NONE;
+    u8 windowId;
+    int x;
+
+    switch (slotIndex)
+    {
+    case 0:
+        item = sum->item;
+        break;
+    case 1:
+        item = sum->itemSlot2;
+        break;
+    case 2:
+        item = sum->itemSlot3;
+        break;
+    case 3:
+        item = sum->itemSlot4;
+        break;
+    }
+
+    windowId = AddWindowFromTemplateList(sPageTraitsTemplate, slotIndex);
+
+    if (item == ITEM_NONE)
+    {
+        x = GetStringRightAlignXOffset(FONT_NORMAL, gText_Blank, 18 * 8);
+        PrintTextOnWindow(windowId, gText_Blank, x, 1, 0, 1);
+        PrintTextOnWindow(windowId, gText_Blank, 0, 17, 0, 0);
+    }
+    else if (!IsItemSlotUnlockedByLevelAndShiny(slotNum, sum->level, sum->isShiny))
+    {
+        CopyItemName(item, gStringVar1);
+        x = GetStringRightAlignXOffset(FONT_NORMAL, gStringVar1, 18 * 8);
+        PrintTextOnWindow(windowId, gStringVar1, x, 1, 0, 1);
+
+        if (slotNum == 4)
+        {
+            // Slot 4 is Shiny-exclusive, not level-gated -- show the dedicated message
+            // rather than a level number.
+            PrintTextOnWindow(windowId, sText_ItemSlotShinyOnly, 0, 17, 0, 0);
+        }
+        else
+        {
+            StringCopy(gStringVar1, sText_ItemSlotUnlockLevel);
+            ConvertIntToDecimalStringN(gStringVar2, slotNum == 2 ? ITEM_SLOT_2_UNLOCK_LEVEL : ITEM_SLOT_3_UNLOCK_LEVEL, STR_CONV_MODE_LEFT_ALIGN, 3);
+            StringAppend(gStringVar1, gStringVar2);
+            x = GetStringRightAlignXOffset(FONT_NORMAL, gStringVar1, 18 * 8);
+            PrintTextOnWindow(windowId, gStringVar1, x, 17, 0, 0);
+        }
+    }
+    else
+    {
+        CopyItemName(item, gStringVar1);
+        x = GetStringRightAlignXOffset(FONT_NORMAL, gStringVar1, 18 * 8);
+        PrintTextOnWindow(windowId, gStringVar1, x, 1, 0, 1);
+        PrintTextOnWindow(windowId, GetItemDescription(item), 0, 17, 0, 0);
+    }
 }
 
 static void BufferMonTrainerMemo(void)
@@ -3982,7 +4144,6 @@ static void PrintEggMemo(void)
 
 static void PrintSkillsPageText(void)
 {
-    PrintHeldItemName();
     PrintRibbonCount();
     BufferLeftColumnStats();
     PrintLeftColumnStats();
@@ -3998,7 +4159,6 @@ static void Task_PrintSkillsPage(u8 taskId)
     switch (data[0])
     {
     case 1:
-        PrintHeldItemName();
         break;
     case 2:
         PrintRibbonCount();
@@ -4025,33 +4185,6 @@ static void Task_PrintSkillsPage(u8 taskId)
         return;
     }
     data[0]++;
-}
-
-static void PrintHeldItemName(void)
-{
-    const u8 *text;
-    u32 fontId;
-    int x;
-
-    if (sMonSummaryScreen->summary.item == ITEM_ENIGMA_BERRY_E_READER
-        && IsMultiBattle() == TRUE
-        && (sMonSummaryScreen->curMonIndex == 1 || sMonSummaryScreen->curMonIndex == 4 || sMonSummaryScreen->curMonIndex == 5))
-    {
-        text = GetItemName(ITEM_ENIGMA_BERRY_E_READER);
-    }
-    else if (sMonSummaryScreen->summary.item == ITEM_NONE)
-    {
-        text = gText_None;
-    }
-    else
-    {
-        CopyItemName(sMonSummaryScreen->summary.item, gStringVar1);
-        text = gStringVar1;
-    }
-
-    fontId = GetFontIdToFit(text, FONT_NORMAL, 0, WindowTemplateWidthPx(&sPageSkillsTemplate[PSS_DATA_WINDOW_SKILLS_HELD_ITEM]) - 8);
-    x = GetStringCenterAlignXOffset(fontId, text, 72) + 6;
-    PrintTextOnWindowWithFont(AddWindowFromTemplateList(sPageSkillsTemplate, PSS_DATA_WINDOW_SKILLS_HELD_ITEM), text, x, 1, 0, 0, fontId);
 }
 
 static void PrintRibbonCount(void)

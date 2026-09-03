@@ -2432,4 +2432,118 @@ const struct AbilityInfo gAbilitiesInfo[ABILITIES_COUNT] =
         .cantBeSwapped = TRUE,
         .cantBeTraced = TRUE,
     },
+    [ABILITY_PIERCING_DRILL] =
+    {
+        .name = _("PIERCING DRILL"),
+        .description = COMPOUND_STRING("Contact evades protection."),
+        .aiRating = 6,
+    },
+    [ABILITY_DRAGONIZE] =
+    {
+        .name = _("DRAGONIZE"),
+        .description = COMPOUND_STRING("Normal moves turn Dragon."),
+        .aiRating = 6,
+    },
+    [ABILITY_FELINE_PROWESS] =
+    {
+        .name = _("FELINE PROWESS"),
+        .description = COMPOUND_STRING("Doubles Sp. Atk for special moves."),
+        .aiRating = 8,
+    },
+    [ABILITY_OVERCHARGED] =
+    {
+        .name = _("OVERCHARGED"),
+        .description = COMPOUND_STRING("Doubles this Pokemon's Speed."),
+        .aiRating = 8,
+    },
+    [ABILITY_DEADEYE] =
+    {
+        .name = _("DEADEYE"),
+        .description = COMPOUND_STRING("This Pokemon's moves never miss."),
+        .aiRating = 7,
+    },
+    [ABILITY_CHEATING_DEATH] =
+    {
+        .name = _("CHEATING DEATH"),
+        .description = COMPOUND_STRING("Takes no damage from the first two hits each battle."),
+        .aiRating = 7,
+    },
+    [ABILITY_AMBUSH] =
+    {
+        .name = _("AMBUSH"),
+        .description = COMPOUND_STRING("Moves used on the first turn are critical hits."),
+        .aiRating = 7,
+    },
+    [ABILITY_READIED_ACTION] =
+    {
+        .name = _("READIED ACTION"),
+        .description = COMPOUND_STRING("Doubles Attack and Sp. Atk on the first turn."),
+        .aiRating = 7,
+    },
+    [ABILITY_RAGING_FIST] =
+    {
+        .name = _("RAGING FIST"),
+        .description = COMPOUND_STRING("Punching moves hit twice. 2nd hit is 50% power."),
+        .aiRating = 7,
+    },
+    [ABILITY_GROWING_TOOTH] =
+    {
+        .name = _("GROWING TOOTH"),
+        .description = COMPOUND_STRING("Raises Attack after landing a biting move."),
+        .aiRating = 6,
+    },
+    [ABILITY_MYSTIC_POWER] =
+    {
+        .name = _("MYSTIC POWER"),
+        .description = COMPOUND_STRING("All moves gain the same-type attack bonus."),
+        .aiRating = 6,
+    },
+    [ABILITY_CRYPTIC_POWER] =
+    {
+        .name = _("CRYPTIC POWER"),
+        .description = COMPOUND_STRING("Doubles Sp. Atk for special moves."),
+        .aiRating = 8,
+    },
+    [ABILITY_JUGGERNAUT] =
+    {
+        .name = _("JUGGERNAUT"),
+        .description = COMPOUND_STRING("Immune to paralysis. Contact moves use extra Def."),
+        .aiRating = 7,
+    },
+    [ABILITY_MAJESTIC_BIRD] =
+    {
+        .name = _("MAJESTIC BIRD"),
+        .description = COMPOUND_STRING("Raises Sp. Atk by 1.5x for special moves."),
+        .aiRating = 7,
+    },
+    [ABILITY_FATAL_PRECISION] =
+    {
+        .name = _("FATAL PRECISION"),
+        .description = COMPOUND_STRING("Super effective moves never miss and hit harder."),
+        .aiRating = 8,
+    },
+    [ABILITY_SPEED_FORCE] =
+    {
+        .name = _("SPEED FORCE"),
+        .description = COMPOUND_STRING("Contact moves use extra Speed as power."),
+        .aiRating = 6,
+    },
+    [ABILITY_PRIMAL_MAW] =
+    {
+        .name = _("PRIMAL MAW"),
+        .description = COMPOUND_STRING("Biting moves hit twice. 2nd hit is 50% power."),
+        .aiRating = 7,
+    },
+    [ABILITY_DUAL_WIELD] =
+    {
+        .name = _("DUAL WIELD"),
+        .description = COMPOUND_STRING("Pulse and slicing moves hit twice for 75% power."),
+        .aiRating = 7,
+    },
+    [ABILITY_ADRENALINE_RUSH] =
+    {
+        .name = _("ADRENALINE RUSH"),
+        .description = COMPOUND_STRING("Raises Speed when this Pokemon knocks out a foe."),
+        .aiRating = 6,
+    },
 };

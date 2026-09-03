@@ -3923,6 +3923,68 @@ void SetBattleMonMoveSlot(struct BattlePokemon *mon, enum Move move, u8 slot)
     mon->pp[slot] = GetMovePP(move);
 }
 
+// Assigns an item to one of a Pokemon's 4 held item slots. slotNum is 1-4;
+// slot 1 is the vanilla held item, slots 2-4 are the extra slots.
+// Returns FALSE (and does nothing) if that Pokemon already holds this exact item
+// in a different slot -- the same item can't occupy two slots on one Pokemon.
+// ITEM_NONE is exempt from this check, since clearing a slot should always work.
+// Note: this only writes the data -- it doesn't check IsItemSlotUnlocked, so it's
+// safe to assign a slot 2/3/4 item to a mon before it's actually unlocked (the item
+// will simply sit there inactive until the level/Shiny requirement is met).
+bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item)
+{
+    u8 data[2];
+
+    if (item != ITEM_NONE)
+    {
+        u16 existingItems[MAX_MON_ITEM_SLOTS] = {
+            GetMonData(mon, MON_DATA_HELD_ITEM),
+            GetMonData(mon, MON_DATA_HELD_ITEM_SLOT2),
+            GetMonData(mon, MON_DATA_HELD_ITEM_SLOT3),
+            GetMonData(mon, MON_DATA_HELD_ITEM_SLOT4),
+        };
+        for (u8 i = 0; i < MAX_MON_ITEM_SLOTS; i++)
+        {
+            if (i + 1 != slotNum && existingItems[i] == item)
+                return FALSE;
+        }
+    }
+
+    data[0] = item & 0xFF;
+    data[1] = item >> 8;
+
+    switch (slotNum)
+    {
+    case 1:
+        SetMonData(mon, MON_DATA_HELD_ITEM, data);
+        break;
+    case 2:
+        SetMonData(mon, MON_DATA_HELD_ITEM_SLOT2, data);
+        break;
+    case 3:
+        SetMonData(mon, MON_DATA_HELD_ITEM_SLOT3, data);
+        break;
+    case 4:
+        SetMonData(mon, MON_DATA_HELD_ITEM_SLOT4, data);
+        break;
+    }
+    return TRUE;
+}
+
+// Debug/test hook: gives the lead party Pokemon a Focus Sash in Slot 4 specifically
+// (rather than Slot 1) to verify the 4-item-slot system end-to-end. Focus Sash is the
+// one hold effect actually wired up to check all 4 slots so far (see
+// GetBattlerItemWithHoldEffect / BattlerHasHoldEffect in battle_util.c).
+// If the lead mon is Shiny, it should survive a lethal hit at 1 HP as normal.
+// If it isn't Shiny, Slot 4 isn't unlocked yet, so the Focus Sash should NOT trigger --
+// that's the correct behavior to look for, not a bug.
+// Call via `callnative Script_DebugGiveItemSlots` from any map script.
+void Script_DebugGiveItemSlots(struct ScriptContext *ctx)
+{
+    struct Pokemon *mon = &gPlayerParty[0];
+    SetMonItemSlot(mon, 4, ITEM_FOCUS_SASH);
+}
+
 void GiveMonInitialMoveset(struct Pokemon *mon)
 {
     GiveBoxMonInitialMoveset(&mon->box);
@@ -4927,6 +4989,15 @@ u32 GetBoxMonData3(struct BoxPokemon *boxMon, s32 field, u8 *data)
         case MON_DATA_DAYS_SINCE_FORM_CHANGE:
             retVal = boxMon->daysSinceFormChange;
             break;
+        case MON_DATA_HELD_ITEM_SLOT2:
+            retVal = boxMon->heldItemSlot2;
+            break;
+        case MON_DATA_HELD_ITEM_SLOT3:
+            retVal = boxMon->heldItemSlot3;
+            break;
+        case MON_DATA_HELD_ITEM_SLOT4:
+            retVal = boxMon->heldItemSlot4;
+            break;
         default:
             break;
         }
@@ -5360,6 +5431,15 @@ void SetBoxMonData(struct BoxPokemon *boxMon, s32 field, const void *dataArg)
         }
         case MON_DATA_DAYS_SINCE_FORM_CHANGE:
             SET8(boxMon->daysSinceFormChange);
+            break;
+        case MON_DATA_HELD_ITEM_SLOT2:
+            SET16(boxMon->heldItemSlot2);
+            break;
+        case MON_DATA_HELD_ITEM_SLOT3:
+            SET16(boxMon->heldItemSlot3);
+            break;
+        case MON_DATA_HELD_ITEM_SLOT4:
+            SET16(boxMon->heldItemSlot4);
             break;
         }
     }
@@ -5956,6 +6036,9 @@ void PokemonToBattleMon(struct Pokemon *src, struct BattlePokemon *dst)
 
     dst->species = GetMonData(src, MON_DATA_SPECIES);
     dst->item = GetMonData(src, MON_DATA_HELD_ITEM);
+    dst->itemSlot2 = GetMonData(src, MON_DATA_HELD_ITEM_SLOT2);
+    dst->itemSlot3 = GetMonData(src, MON_DATA_HELD_ITEM_SLOT3);
+    dst->itemSlot4 = GetMonData(src, MON_DATA_HELD_ITEM_SLOT4);
     dst->ppBonuses = GetMonData(src, MON_DATA_PP_BONUSES);
     dst->friendship = GetMonData(src, MON_DATA_FRIENDSHIP);
     dst->experience = GetMonData(src, MON_DATA_EXP);

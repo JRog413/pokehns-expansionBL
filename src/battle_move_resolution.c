@@ -1867,8 +1867,18 @@ static enum CancelerResult CancelerNotFullyProtected(struct BattleContext *ctx)
 static bool32 IsMoveParentalBondAffected(struct BattleContext *ctx)
 {
     enum BattleMoveEffects effect = GetMoveEffect(ctx->move);
+    bool32 abilityQualifies = FALSE;
 
-    if (ctx->abilityAtk != ABILITY_PARENTAL_BOND
+    if (ctx->abilityAtk == ABILITY_PARENTAL_BOND)
+        abilityQualifies = TRUE;
+    else if (ctx->abilityAtk == ABILITY_RAGING_FIST && IsPunchingMove(ctx->move))
+        abilityQualifies = TRUE;
+    else if (ctx->abilityAtk == ABILITY_PRIMAL_MAW && IsBitingMove(ctx->move))
+        abilityQualifies = TRUE;
+    else if (ctx->abilityAtk == ABILITY_DUAL_WIELD && (IsPulseMove(ctx->move) || IsSlicingMove(ctx->move)))
+        abilityQualifies = TRUE;
+
+    if (!abilityQualifies
      || gBattleStruct->numSpreadTargets > 1
      || IsMoveParentalBondBanned(ctx->move)
      || GetMoveCategory(ctx->move) == DAMAGE_CATEGORY_STATUS

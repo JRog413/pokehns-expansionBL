@@ -1,6 +1,8 @@
 #ifndef GUARD_POKEMON_H
 #define GUARD_POKEMON_H
 
+struct ScriptContext;
+
 #include "contest_effect.h"
 #include "sprite.h"
 #include "constants/battle.h"
@@ -21,6 +23,9 @@
 #define GET_BASE_SPECIES_ID(speciesId) (GetFormSpeciesId(speciesId, 0))
 #define FORM_SPECIES_END (0xffff)
 
+// Extra held item slots: Slot 1 is the vanilla held item, slots 2-4 are new.
+#define MAX_MON_ITEM_SLOTS 4
+
 // Property labels for Get(Box)MonData / Set(Box)MonData
 enum MonData {
     MON_DATA_PERSONALITY,
@@ -38,6 +43,9 @@ enum MonData {
     MON_DATA_HIDDEN_NATURE,
     MON_DATA_HP_LOST,
     MON_DATA_DAYS_SINCE_FORM_CHANGE,
+    MON_DATA_HELD_ITEM_SLOT2,
+    MON_DATA_HELD_ITEM_SLOT3,
+    MON_DATA_HELD_ITEM_SLOT4,
     MON_DATA_ENCRYPT_SEPARATOR,
     MON_DATA_NICKNAME,
     MON_DATA_NICKNAME10,
@@ -273,6 +281,15 @@ struct BoxPokemon
     u16 shinyModifier:1;
     u16 unused_1E:1;
 
+    // Extra held item slots (Slot 1 remains the vanilla encrypted heldItem field).
+    // Kept unencrypted and outside the secure union deliberately: held items aren't
+    // sensitive data worth protecting from casual save-editing the way species/IVs/
+    // experience are, and this avoids touching the encrypted substructure layout,
+    // its checksum, and every place that reads/writes it.
+    u16 heldItemSlot2;
+    u16 heldItemSlot3;
+    u16 heldItemSlot4;
+
     union
     {
         u32 raw[(NUM_SUBSTRUCT_BYTES * 4) / 4]; // *4 because there are 4 substructs, /4 because it's u32, not u8
@@ -369,6 +386,9 @@ struct BattlePokemon
     /*0x5D*/ u32 otId;
     /*0x61*/ u8 metLevel;
     /*0x62*/ bool8 isShiny;
+    enum Item itemSlot2;
+    enum Item itemSlot3;
+    enum Item itemSlot4;
 };
 
 struct EvolutionParam
@@ -768,6 +788,30 @@ u16 GiveMoveToBattleMon(struct BattlePokemon *mon, enum Move move);
 void SetMonMoveSlot(struct Pokemon *mon, enum Move move, u8 slot);
 void SetBoxMonMoveSlot(struct BoxPokemon *mon, enum Move move, u8 slot);
 void SetBattleMonMoveSlot(struct BattlePokemon *mon, enum Move move, u8 slot);
+// Extra held item slots: Slot 1 is always active (the vanilla item).
+// Slot 2 unlocks at level 30, Slot 3 at level 60, Slot 4 is exclusive to Shiny Pokemon.
+#define ITEM_SLOT_2_UNLOCK_LEVEL 30
+#define ITEM_SLOT_3_UNLOCK_LEVEL 60
+
+static inline bool32 IsItemSlotUnlockedByLevelAndShiny(u32 slotNum, u8 level, bool32 isShiny)
+{
+    switch (slotNum)
+    {
+    case 1:
+        return TRUE;
+    case 2:
+        return level >= ITEM_SLOT_2_UNLOCK_LEVEL;
+    case 3:
+        return level >= ITEM_SLOT_3_UNLOCK_LEVEL;
+    case 4:
+        return isShiny;
+    default:
+        return FALSE;
+    }
+}
+
+bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item);
+void Script_DebugGiveItemSlots(struct ScriptContext *ctx);
 void GiveMonInitialMoveset(struct Pokemon *mon);
 void GiveBoxMonInitialMoveset(struct BoxPokemon *boxMon);
 void GiveMonDefaultMove(struct Pokemon *mon, u32 slot);
