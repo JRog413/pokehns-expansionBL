@@ -43,9 +43,6 @@ enum MonData {
     MON_DATA_HIDDEN_NATURE,
     MON_DATA_HP_LOST,
     MON_DATA_DAYS_SINCE_FORM_CHANGE,
-    MON_DATA_HELD_ITEM_SLOT2,
-    MON_DATA_HELD_ITEM_SLOT3,
-    MON_DATA_HELD_ITEM_SLOT4,
     MON_DATA_ENCRYPT_SEPARATOR,
     MON_DATA_NICKNAME,
     MON_DATA_NICKNAME10,
@@ -280,15 +277,6 @@ struct BoxPokemon
     u16 hpLost:14; // 16383 HP.
     u16 shinyModifier:1;
     u16 unused_1E:1;
-
-    // Extra held item slots (Slot 1 remains the vanilla encrypted heldItem field).
-    // Kept unencrypted and outside the secure union deliberately: held items aren't
-    // sensitive data worth protecting from casual save-editing the way species/IVs/
-    // experience are, and this avoids touching the encrypted substructure layout,
-    // its checksum, and every place that reads/writes it.
-    u16 heldItemSlot2;
-    u16 heldItemSlot3;
-    u16 heldItemSlot4;
 
     union
     {
@@ -810,6 +798,7 @@ static inline bool32 IsItemSlotUnlockedByLevelAndShiny(u32 slotNum, u8 level, bo
     }
 }
 
+u16 GetMonEquippedItem(u32 personality, u8 slotNum);
 bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item);
 void Script_DebugGiveItemSlots(struct ScriptContext *ctx);
 void GiveMonInitialMoveset(struct Pokemon *mon);

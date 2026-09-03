@@ -1195,6 +1195,19 @@ struct MomSavingsData
     u8 isInitialized;
 };
 
+// See the equippedItems field on SaveBlock1 for the full explanation of why this is a
+// separate lookup table rather than fields on BoxPokemon. Sized for a full party (6)
+// plus one full PC box (30) of Pokemon with something equipped simultaneously.
+#define MON_EQUIPPED_ITEMS_COUNT 36
+
+struct MonEquippedItems
+{
+    u32 personality; // 0 = unused slot; a real Pokemon's personality is never 0
+    u16 itemSlot2;
+    u16 itemSlot3;
+    u16 itemSlot4;
+};
+
 struct SaveBlock1
 {
              u16 saveVersion;
@@ -1319,6 +1332,16 @@ struct SaveBlock1
 #if IS_HNS
     struct MomSavingsData momSavings;
 #endif
+    // Extra held item slots (slots 2-4; slot 1 remains the vanilla per-mon held item).
+    // A small, fixed-size lookup table rather than fields on BoxPokemon itself: adding
+    // fields directly to BoxPokemon gets multiplied across every PC box slot (420+ of
+    // them) and blows the GBA's fixed save-sector budgets. This table instead holds up
+    // to MON_EQUIPPED_ITEMS_COUNT entries (sized for the full party plus one full box
+    // of 30), keyed by personality value; a personality of 0 marks an unused slot.
+    // Entries persist through deposit/withdraw only for the one designated "equipment"
+    // box -- depositing into any other box clears the entry and returns its items to
+    // the player's Bag (see item_equipment.c).
+    struct MonEquippedItems equippedItems[MON_EQUIPPED_ITEMS_COUNT];
     // sizeof: 0x3???
 };
 

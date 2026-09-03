@@ -3923,51 +3923,111 @@ void SetBattleMonMoveSlot(struct BattlePokemon *mon, enum Move move, u8 slot)
     mon->pp[slot] = GetMovePP(move);
 }
 
+// Looks up a Pokemon's equippedItems table entry by personality. Returns the index,
+// or -1 if that Pokemon has no entry (i.e. nothing equipped in slots 2-4).
+static s32 FindEquippedItemsEntry(u32 personality)
+{
+    for (u32 i = 0; i < MON_EQUIPPED_ITEMS_COUNT; i++)
+    {
+        if (gSaveBlock1Ptr->equippedItems[i].personality == personality)
+            return i;
+    }
+    return -1;
+}
+
+// Returns the item in one of a Pokemon's extra held item slots (2-4), or ITEM_NONE if
+// that Pokemon has nothing equipped there. Looked up by personality value so this
+// works the same regardless of whether the mon is in the party or its designated PC
+// box (see the equippedItems field on SaveBlock1 for the full design rationale).
+u16 GetMonEquippedItem(u32 personality, u8 slotNum)
+{
+    s32 index = FindEquippedItemsEntry(personality);
+    if (index == -1)
+        return ITEM_NONE;
+
+    switch (slotNum)
+    {
+    case 2:
+        return gSaveBlock1Ptr->equippedItems[index].itemSlot2;
+    case 3:
+        return gSaveBlock1Ptr->equippedItems[index].itemSlot3;
+    case 4:
+        return gSaveBlock1Ptr->equippedItems[index].itemSlot4;
+    default:
+        return ITEM_NONE;
+    }
+}
+
 // Assigns an item to one of a Pokemon's 4 held item slots. slotNum is 1-4;
-// slot 1 is the vanilla held item, slots 2-4 are the extra slots.
-// Returns FALSE (and does nothing) if that Pokemon already holds this exact item
-// in a different slot -- the same item can't occupy two slots on one Pokemon.
-// ITEM_NONE is exempt from this check, since clearing a slot should always work.
+// slot 1 is the vanilla held item (still stored directly on the mon, unaffected by
+// any of this), slots 2-4 go through the equippedItems lookup table instead.
+// Returns FALSE (and does nothing) if:
+//  - that Pokemon already holds this exact item in a different slot (no duplicates), or
+//  - a new table entry is needed (this mon has never had anything equipped before) but
+//    the table is full (all MON_EQUIPPED_ITEMS_COUNT slots already used by other mons)
+// ITEM_NONE is exempt from the duplicate check, since clearing a slot should always work.
 // Note: this only writes the data -- it doesn't check IsItemSlotUnlocked, so it's
 // safe to assign a slot 2/3/4 item to a mon before it's actually unlocked (the item
 // will simply sit there inactive until the level/Shiny requirement is met).
 bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item)
 {
-    u8 data[2];
+    u32 personality = GetMonData(mon, MON_DATA_PERSONALITY);
+
+    if (slotNum == 1)
+    {
+        u8 data[2];
+        data[0] = item & 0xFF;
+        data[1] = item >> 8;
+        SetMonData(mon, MON_DATA_HELD_ITEM, data);
+        return TRUE;
+    }
 
     if (item != ITEM_NONE)
     {
-        u16 existingItems[MAX_MON_ITEM_SLOTS] = {
-            GetMonData(mon, MON_DATA_HELD_ITEM),
-            GetMonData(mon, MON_DATA_HELD_ITEM_SLOT2),
-            GetMonData(mon, MON_DATA_HELD_ITEM_SLOT3),
-            GetMonData(mon, MON_DATA_HELD_ITEM_SLOT4),
-        };
-        for (u8 i = 0; i < MAX_MON_ITEM_SLOTS; i++)
-        {
-            if (i + 1 != slotNum && existingItems[i] == item)
-                return FALSE;
-        }
+        u16 mainItem = GetMonData(mon, MON_DATA_HELD_ITEM);
+        if (mainItem == item)
+            return FALSE;
+        if (slotNum != 2 && GetMonEquippedItem(personality, 2) == item)
+            return FALSE;
+        if (slotNum != 3 && GetMonEquippedItem(personality, 3) == item)
+            return FALSE;
+        if (slotNum != 4 && GetMonEquippedItem(personality, 4) == item)
+            return FALSE;
     }
 
-    data[0] = item & 0xFF;
-    data[1] = item >> 8;
+    s32 index = FindEquippedItemsEntry(personality);
+    if (index == -1)
+    {
+        if (item == ITEM_NONE)
+            return TRUE; // nothing equipped, nothing to clear -- no entry needed
+        index = FindEquippedItemsEntry(0); // first free slot
+        if (index == -1)
+            return FALSE; // table is full
+        gSaveBlock1Ptr->equippedItems[index].personality = personality;
+        gSaveBlock1Ptr->equippedItems[index].itemSlot2 = ITEM_NONE;
+        gSaveBlock1Ptr->equippedItems[index].itemSlot3 = ITEM_NONE;
+        gSaveBlock1Ptr->equippedItems[index].itemSlot4 = ITEM_NONE;
+    }
 
     switch (slotNum)
     {
-    case 1:
-        SetMonData(mon, MON_DATA_HELD_ITEM, data);
-        break;
     case 2:
-        SetMonData(mon, MON_DATA_HELD_ITEM_SLOT2, data);
+        gSaveBlock1Ptr->equippedItems[index].itemSlot2 = item;
         break;
     case 3:
-        SetMonData(mon, MON_DATA_HELD_ITEM_SLOT3, data);
+        gSaveBlock1Ptr->equippedItems[index].itemSlot3 = item;
         break;
     case 4:
-        SetMonData(mon, MON_DATA_HELD_ITEM_SLOT4, data);
+        gSaveBlock1Ptr->equippedItems[index].itemSlot4 = item;
         break;
     }
+
+    // If all three extra slots are now empty, free the table entry for another mon.
+    if (gSaveBlock1Ptr->equippedItems[index].itemSlot2 == ITEM_NONE
+     && gSaveBlock1Ptr->equippedItems[index].itemSlot3 == ITEM_NONE
+     && gSaveBlock1Ptr->equippedItems[index].itemSlot4 == ITEM_NONE)
+        gSaveBlock1Ptr->equippedItems[index].personality = 0;
+
     return TRUE;
 }
 
@@ -4989,15 +5049,6 @@ u32 GetBoxMonData3(struct BoxPokemon *boxMon, s32 field, u8 *data)
         case MON_DATA_DAYS_SINCE_FORM_CHANGE:
             retVal = boxMon->daysSinceFormChange;
             break;
-        case MON_DATA_HELD_ITEM_SLOT2:
-            retVal = boxMon->heldItemSlot2;
-            break;
-        case MON_DATA_HELD_ITEM_SLOT3:
-            retVal = boxMon->heldItemSlot3;
-            break;
-        case MON_DATA_HELD_ITEM_SLOT4:
-            retVal = boxMon->heldItemSlot4;
-            break;
         default:
             break;
         }
@@ -5431,15 +5482,6 @@ void SetBoxMonData(struct BoxPokemon *boxMon, s32 field, const void *dataArg)
         }
         case MON_DATA_DAYS_SINCE_FORM_CHANGE:
             SET8(boxMon->daysSinceFormChange);
-            break;
-        case MON_DATA_HELD_ITEM_SLOT2:
-            SET16(boxMon->heldItemSlot2);
-            break;
-        case MON_DATA_HELD_ITEM_SLOT3:
-            SET16(boxMon->heldItemSlot3);
-            break;
-        case MON_DATA_HELD_ITEM_SLOT4:
-            SET16(boxMon->heldItemSlot4);
             break;
         }
     }
@@ -6036,9 +6078,9 @@ void PokemonToBattleMon(struct Pokemon *src, struct BattlePokemon *dst)
 
     dst->species = GetMonData(src, MON_DATA_SPECIES);
     dst->item = GetMonData(src, MON_DATA_HELD_ITEM);
-    dst->itemSlot2 = GetMonData(src, MON_DATA_HELD_ITEM_SLOT2);
-    dst->itemSlot3 = GetMonData(src, MON_DATA_HELD_ITEM_SLOT3);
-    dst->itemSlot4 = GetMonData(src, MON_DATA_HELD_ITEM_SLOT4);
+    dst->itemSlot2 = GetMonEquippedItem(GetMonData(src, MON_DATA_PERSONALITY), 2);
+    dst->itemSlot3 = GetMonEquippedItem(GetMonData(src, MON_DATA_PERSONALITY), 3);
+    dst->itemSlot4 = GetMonEquippedItem(GetMonData(src, MON_DATA_PERSONALITY), 4);
     dst->ppBonuses = GetMonData(src, MON_DATA_PP_BONUSES);
     dst->friendship = GetMonData(src, MON_DATA_FRIENDSHIP);
     dst->experience = GetMonData(src, MON_DATA_EXP);

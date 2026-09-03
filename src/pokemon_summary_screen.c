@@ -1704,9 +1704,9 @@ static bool8 ExtractMonDataToSummaryStruct(struct Pokemon *mon)
         sum->level = GetMonData(mon, MON_DATA_LEVEL);
         sum->abilityNum = GetMonData(mon, MON_DATA_ABILITY_NUM);
         sum->item = GetMonData(mon, MON_DATA_HELD_ITEM);
-        sum->itemSlot2 = GetMonData(mon, MON_DATA_HELD_ITEM_SLOT2);
-        sum->itemSlot3 = GetMonData(mon, MON_DATA_HELD_ITEM_SLOT3);
-        sum->itemSlot4 = GetMonData(mon, MON_DATA_HELD_ITEM_SLOT4);
+        sum->itemSlot2 = GetMonEquippedItem(GetMonData(mon, MON_DATA_PERSONALITY), 2);
+        sum->itemSlot3 = GetMonEquippedItem(GetMonData(mon, MON_DATA_PERSONALITY), 3);
+        sum->itemSlot4 = GetMonEquippedItem(GetMonData(mon, MON_DATA_PERSONALITY), 4);
         sum->pid = GetMonData(mon, MON_DATA_PERSONALITY);
         sum->sanity = GetMonData(mon, MON_DATA_SANITY_IS_BAD_EGG);
 
