@@ -3929,7 +3929,7 @@ static s32 FindEquippedItemsEntry(u32 personality)
 {
     for (u32 i = 0; i < MON_EQUIPPED_ITEMS_COUNT; i++)
     {
-        if (gSaveBlock1Ptr->equippedItems[i].personality == personality)
+        if (gPokemonStoragePtr->equippedItems[i].personality == personality)
             return i;
     }
     return -1;
@@ -3948,11 +3948,11 @@ u16 GetMonEquippedItem(u32 personality, u8 slotNum)
     switch (slotNum)
     {
     case 2:
-        return gSaveBlock1Ptr->equippedItems[index].itemSlot2;
+        return gPokemonStoragePtr->equippedItems[index].itemSlot2;
     case 3:
-        return gSaveBlock1Ptr->equippedItems[index].itemSlot3;
+        return gPokemonStoragePtr->equippedItems[index].itemSlot3;
     case 4:
-        return gSaveBlock1Ptr->equippedItems[index].itemSlot4;
+        return gPokemonStoragePtr->equippedItems[index].itemSlot4;
     default:
         return ITEM_NONE;
     }
@@ -4003,30 +4003,30 @@ bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item)
         index = FindEquippedItemsEntry(0); // first free slot
         if (index == -1)
             return FALSE; // table is full
-        gSaveBlock1Ptr->equippedItems[index].personality = personality;
-        gSaveBlock1Ptr->equippedItems[index].itemSlot2 = ITEM_NONE;
-        gSaveBlock1Ptr->equippedItems[index].itemSlot3 = ITEM_NONE;
-        gSaveBlock1Ptr->equippedItems[index].itemSlot4 = ITEM_NONE;
+        gPokemonStoragePtr->equippedItems[index].personality = personality;
+        gPokemonStoragePtr->equippedItems[index].itemSlot2 = ITEM_NONE;
+        gPokemonStoragePtr->equippedItems[index].itemSlot3 = ITEM_NONE;
+        gPokemonStoragePtr->equippedItems[index].itemSlot4 = ITEM_NONE;
     }
 
     switch (slotNum)
     {
     case 2:
-        gSaveBlock1Ptr->equippedItems[index].itemSlot2 = item;
+        gPokemonStoragePtr->equippedItems[index].itemSlot2 = item;
         break;
     case 3:
-        gSaveBlock1Ptr->equippedItems[index].itemSlot3 = item;
+        gPokemonStoragePtr->equippedItems[index].itemSlot3 = item;
         break;
     case 4:
-        gSaveBlock1Ptr->equippedItems[index].itemSlot4 = item;
+        gPokemonStoragePtr->equippedItems[index].itemSlot4 = item;
         break;
     }
 
     // If all three extra slots are now empty, free the table entry for another mon.
-    if (gSaveBlock1Ptr->equippedItems[index].itemSlot2 == ITEM_NONE
-     && gSaveBlock1Ptr->equippedItems[index].itemSlot3 == ITEM_NONE
-     && gSaveBlock1Ptr->equippedItems[index].itemSlot4 == ITEM_NONE)
-        gSaveBlock1Ptr->equippedItems[index].personality = 0;
+    if (gPokemonStoragePtr->equippedItems[index].itemSlot2 == ITEM_NONE
+     && gPokemonStoragePtr->equippedItems[index].itemSlot3 == ITEM_NONE
+     && gPokemonStoragePtr->equippedItems[index].itemSlot4 == ITEM_NONE)
+        gPokemonStoragePtr->equippedItems[index].personality = 0;
 
     return TRUE;
 }

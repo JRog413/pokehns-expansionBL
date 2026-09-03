@@ -1195,9 +1195,19 @@ struct MomSavingsData
     u8 isInitialized;
 };
 
-// See the equippedItems field on SaveBlock1 for the full explanation of why this is a
-// separate lookup table rather than fields on BoxPokemon. Sized for a full party (6)
-// plus one full PC box (30) of Pokemon with something equipped simultaneously.
+// Extra held item slots (slots 2-4; slot 1 remains the vanilla per-mon held item),
+// stored as a separate lookup table on PokemonStorage rather than as fields directly
+// on BoxPokemon: adding fields to BoxPokemon itself gets multiplied across every PC
+// box slot (420+ of them) and every embedded copy in save structures like
+// RecordedBattleSave, blowing the GBA's fixed save-sector budgets almost immediately.
+// PokemonStorage was chosen over SaveBlock1/SaveBlock2 specifically because it has by
+// far the most spare room of the three (about 1.5KB of slack vs a little over 100
+// bytes each on the other two) -- this table costs well under half of that.
+// Sized for a full party (6) plus one full PC box (30) of Pokemon with something
+// equipped simultaneously. A personality of 0 marks an unused table slot.
+// Entries persist through deposit/withdraw only for the one designated "equipment"
+// box -- depositing into any other box clears the entry and returns its items to
+// the player's Bag (see item_equipment.c).
 #define MON_EQUIPPED_ITEMS_COUNT 36
 
 struct MonEquippedItems
@@ -1332,16 +1342,6 @@ struct SaveBlock1
 #if IS_HNS
     struct MomSavingsData momSavings;
 #endif
-    // Extra held item slots (slots 2-4; slot 1 remains the vanilla per-mon held item).
-    // A small, fixed-size lookup table rather than fields on BoxPokemon itself: adding
-    // fields directly to BoxPokemon gets multiplied across every PC box slot (420+ of
-    // them) and blows the GBA's fixed save-sector budgets. This table instead holds up
-    // to MON_EQUIPPED_ITEMS_COUNT entries (sized for the full party plus one full box
-    // of 30), keyed by personality value; a personality of 0 marks an unused slot.
-    // Entries persist through deposit/withdraw only for the one designated "equipment"
-    // box -- depositing into any other box clears the entry and returns its items to
-    // the player's Bag (see item_equipment.c).
-    struct MonEquippedItems equippedItems[MON_EQUIPPED_ITEMS_COUNT];
     // sizeof: 0x3???
 };
 
