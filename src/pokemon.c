@@ -3958,6 +3958,34 @@ u16 GetMonEquippedItem(u32 personality, u8 slotNum)
     }
 }
 
+// Called when a Pokemon with equipped items (slots 2-4) is deposited into any PC box
+// other than the designated "equipment" box (Box 1, index 0). Since only the party and
+// Box 1 preserve equipped items, moving a mon anywhere else would otherwise silently
+// strand its items in a now-orphaned table entry -- instead, each equipped item is
+// returned to the player's Bag and its slot cleared, matching how held Mail gets
+// returned to the Bag when a mon carrying it is deposited.
+// If the Bag can't accept an item (e.g. that pocket is completely full), that specific
+// slot is deliberately left as-is rather than the item being silently lost -- it'll
+// simply still show as equipped until the player has Bag space and moves the mon again.
+void ReturnMonEquippedItemsToBag(u32 personality)
+{
+    s32 index = FindEquippedItemsEntry(personality);
+    if (index == -1)
+        return; // nothing equipped, nothing to do
+
+    struct MonEquippedItems *entry = &gPokemonStoragePtr->equippedItems[index];
+
+    if (entry->itemSlot2 != ITEM_NONE && AddBagItem(entry->itemSlot2, 1))
+        entry->itemSlot2 = ITEM_NONE;
+    if (entry->itemSlot3 != ITEM_NONE && AddBagItem(entry->itemSlot3, 1))
+        entry->itemSlot3 = ITEM_NONE;
+    if (entry->itemSlot4 != ITEM_NONE && AddBagItem(entry->itemSlot4, 1))
+        entry->itemSlot4 = ITEM_NONE;
+
+    if (entry->itemSlot2 == ITEM_NONE && entry->itemSlot3 == ITEM_NONE && entry->itemSlot4 == ITEM_NONE)
+        entry->personality = 0;
+}
+
 // Assigns an item to one of a Pokemon's 4 held item slots. slotNum is 1-4;
 // slot 1 is the vanilla held item (still stored directly on the mon, unaffected by
 // any of this), slots 2-4 go through the equippedItems lookup table instead.

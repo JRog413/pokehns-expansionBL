@@ -6597,6 +6597,14 @@ static void SetPlacedMonData(u8 boxId, u8 position)
     }
     else
     {
+        // Equipped items (slots 2-4) only persist through the party and Box 1 (index 0).
+        // Placing a mon into any other box returns them to the player's Bag instead of
+        // leaving them stranded on a mon that's no longer in an eligible location.
+        // This is deliberately hooked here rather than at each higher-level call site
+        // (grab-and-place, multi-select move, shift) since every one of them funnels
+        // through this single function to actually write the mon into its new box.
+        if (boxId != 0)
+            ReturnMonEquippedItemsToBag(GetMonData(&sStorage->movingMon, MON_DATA_PERSONALITY));
         SetBoxMonAt(boxId, position, &sStorage->movingMon.box);
         SetMonFormPSS(&gPokemonStoragePtr->boxes[boxId][position], FORM_CHANGE_DEPOSIT);
     }

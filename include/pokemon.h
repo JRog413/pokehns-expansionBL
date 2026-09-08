@@ -799,6 +799,7 @@ static inline bool32 IsItemSlotUnlockedByLevelAndShiny(u32 slotNum, u8 level, bo
 }
 
 u16 GetMonEquippedItem(u32 personality, u8 slotNum);
+void ReturnMonEquippedItemsToBag(u32 personality);
 bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item);
 void Script_DebugGiveItemSlots(struct ScriptContext *ctx);
 void GiveMonInitialMoveset(struct Pokemon *mon);
