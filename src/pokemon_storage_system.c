@@ -6597,14 +6597,9 @@ static void SetPlacedMonData(u8 boxId, u8 position)
     }
     else
     {
-        // Equipped items (slots 2-4) only persist through the party and Box 1 (index 0).
-        // Placing a mon into any other box returns them to the player's Bag instead of
-        // leaving them stranded on a mon that's no longer in an eligible location.
-        // This is deliberately hooked here rather than at each higher-level call site
-        // (grab-and-place, multi-select move, shift) since every one of them funnels
-        // through this single function to actually write the mon into its new box.
-        if (boxId != 0)
-            ReturnMonEquippedItemsToBag(GetMonData(&sStorage->movingMon, MON_DATA_PERSONALITY));
+        // Equipped items (slots 2-4) are addressed by each mon's own equipmentIndex
+        // field on BoxPokemon (see include/pokemon.h), so they travel automatically
+        // with this struct-copy into any box -- no special-casing needed here anymore.
         SetBoxMonAt(boxId, position, &sStorage->movingMon.box);
         SetMonFormPSS(&gPokemonStoragePtr->boxes[boxId][position], FORM_CHANGE_DEPOSIT);
     }
@@ -6696,6 +6691,7 @@ static void ReleaseMon(void)
 {
     u8 boxId;
     enum Item item = ITEM_NONE;
+    u8 equipmentIndex;
 
     DestroyReleaseMonIcon();
     if (sIsMonBeingMoved)
@@ -6709,17 +6705,24 @@ static void ReleaseMon(void)
             boxId = TOTAL_BOXES_COUNT;
             if (OW_PC_RELEASE_ITEM >= GEN_8)
                 item = GetMonData(&gPlayerParty[sCursorPosition], MON_DATA_HELD_ITEM);
+            equipmentIndex = GetMonData(&gPlayerParty[sCursorPosition], MON_DATA_EQUIPMENT_INDEX);
         }
         else
         {
             boxId = StorageGetCurrentBox();
             if (OW_PC_RELEASE_ITEM >= GEN_8)
                 item = GetBoxMonDataAt(boxId, sCursorPosition, MON_DATA_HELD_ITEM);
+            equipmentIndex = GetBoxMonDataAt(boxId, sCursorPosition, MON_DATA_EQUIPMENT_INDEX);
         }
 
         PurgeMonOrBoxMon(boxId, sCursorPosition);
         if (item != ITEM_NONE)
             AddBagItem(item, 1);
+        // Unlike the vanilla held item above, equipped items (slots 2-4) are always
+        // returned regardless of OW_PC_RELEASE_ITEM: without this, a released mon's
+        // table row would be silently freed (and reused by the next mon to equip
+        // something) with its items simply gone, rather than returned to the player.
+        ReturnMonEquippedItemsToBag(equipmentIndex);
     }
     TryRefreshDisplayMon();
 }

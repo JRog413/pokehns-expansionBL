@@ -338,6 +338,14 @@ void NuzlockeDeletePartyMon(u8 position)
     {
         CopyMonToPC(&gPlayerParty[position]);
     }
+    else
+    {
+        // Unlike the CopyMonToPC path above (where equipment travels automatically
+        // with the copied mon, same as any other move), this is a genuine permanent
+        // deletion -- return any equipped items (slots 2-4) to the Bag first so they
+        // aren't silently lost, matching the same precaution in ReleaseMon.
+        ReturnMonEquippedItemsToBag(GetMonData(&gPlayerParty[position], MON_DATA_EQUIPMENT_INDEX));
+    }
     PurgeMonOrBoxMon(TOTAL_BOXES_COUNT, position);
 }
 

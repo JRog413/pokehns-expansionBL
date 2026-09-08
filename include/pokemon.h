@@ -48,6 +48,7 @@ enum MonData {
     MON_DATA_NICKNAME10,
     MON_DATA_SPECIES,
     MON_DATA_HELD_ITEM,
+    MON_DATA_EQUIPMENT_INDEX,
     MON_DATA_MOVE1,
     MON_DATA_MOVE2,
     MON_DATA_MOVE3,
@@ -136,7 +137,17 @@ struct PokemonSubstruct0
     u16 species:11; // 2047 species.
     enum Type teraType:5; // 30 types.
     u16 heldItem:10; // 1023 items.
-    u16 unused_02:6;
+    // Row this Pokemon owns in gPokemonStoragePtr->equippedItems, for its extra held
+    // item slots (2-4). 0 = no equipment. These 6 bits were previously unused padding
+    // within an already-fully-packed 16-bit storage unit, so repurposing them costs
+    // zero additional bytes -- unlike a standalone field placed elsewhere in
+    // BoxPokemon, which (confirmed via direct measurement) costs a full 4 bytes per
+    // instance due to the alignment requirement of the `secure` union below, and at
+    // 420+ BoxPokemon instances in PokemonStorage, blows the save-sector budget almost
+    // immediately. Because this lives on BoxPokemon itself (just inside the encrypted
+    // substruct rather than the plain section), it's still copied automatically by
+    // every existing operation that moves or duplicates a Pokemon.
+    u16 equipmentIndex:6;
     u32 experience:21;
     u32 nickname11:8; // 11th character of nickname.
     u32 unused_04:3;
@@ -798,8 +809,8 @@ static inline bool32 IsItemSlotUnlockedByLevelAndShiny(u32 slotNum, u8 level, bo
     }
 }
 
-u16 GetMonEquippedItem(u32 personality, u8 slotNum);
-void ReturnMonEquippedItemsToBag(u32 personality);
+u16 GetMonEquippedItem(u8 equipmentIndex, u8 slotNum);
+void ReturnMonEquippedItemsToBag(u8 equipmentIndex);
 bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item);
 void Script_DebugGiveItemSlots(struct ScriptContext *ctx);
 void GiveMonInitialMoveset(struct Pokemon *mon);

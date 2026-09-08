@@ -1196,23 +1196,25 @@ struct MomSavingsData
 };
 
 // Extra held item slots (slots 2-4; slot 1 remains the vanilla per-mon held item),
-// stored as a separate lookup table on PokemonStorage rather than as fields directly
-// on BoxPokemon: adding fields to BoxPokemon itself gets multiplied across every PC
-// box slot (420+ of them) and every embedded copy in save structures like
-// RecordedBattleSave, blowing the GBA's fixed save-sector budgets almost immediately.
-// PokemonStorage was chosen over SaveBlock1/SaveBlock2 specifically because it has by
-// far the most spare room of the three (about 1.5KB of slack vs a little over 100
-// bytes each on the other two) -- this table costs well under half of that.
-// Sized for a full party (6) plus one full PC box (30) of Pokemon with something
-// equipped simultaneously. A personality of 0 marks an unused table slot.
-// Entries persist through deposit/withdraw only for the one designated "equipment"
-// box -- depositing into any other box clears the entry and returns its items to
-// the player's Bag (see item_equipment.c).
-#define MON_EQUIPPED_ITEMS_COUNT 36
+// stored as a separate table on PokemonStorage. Each Pokemon addresses its own row
+// directly via a 6-bit equipmentIndex field (0 = no equipment) repurposed from
+// previously-unused padding bits inside BoxPokemon's encrypted substruct -- see that
+// field's own comment in pokemon.h for the full story of why a naive approach (adding
+// fields to BoxPokemon directly, or even a single extra byte placed adjacently to its
+// encrypted union) is not free and blows the GBA's fixed save-sector budgets almost
+// immediately once multiplied across 420+ PC box slots. Because the index lives on
+// BoxPokemon itself, it (and therefore the mon's equipment) travels automatically
+// through every existing operation that moves or copies a Pokemon -- party<->PC,
+// box<->box -- with no separate hooks required to keep them correctly associated.
+// 63 (the maximum a 6-bit field can address, reserving 0 for "none") is not an
+// arbitrary number: it's what a real, measured compile confirmed fits comfortably
+// within PokemonStorage's spare save-sector space at this entry size, so this covers
+// several times the entire active party, though not literally every Pokemon that
+// could ever exist across all PC boxes simultaneously.
+#define MON_EQUIPPED_ITEMS_COUNT 64 // valid indices are 1-63; index 0 means "none"
 
 struct MonEquippedItems
 {
-    u32 personality; // 0 = unused slot; a real Pokemon's personality is never 0
     u16 itemSlot2;
     u16 itemSlot3;
     u16 itemSlot4;

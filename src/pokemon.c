@@ -3923,57 +3923,81 @@ void SetBattleMonMoveSlot(struct BattlePokemon *mon, enum Move move, u8 slot)
     mon->pp[slot] = GetMovePP(move);
 }
 
-// Looks up a Pokemon's equippedItems table entry by personality. Returns the index,
-// or -1 if that Pokemon has no entry (i.e. nothing equipped in slots 2-4).
-static s32 FindEquippedItemsEntry(u32 personality)
-{
-    for (u32 i = 0; i < MON_EQUIPPED_ITEMS_COUNT; i++)
-    {
-        if (gPokemonStoragePtr->equippedItems[i].personality == personality)
-            return i;
-    }
-    return -1;
-}
-
 // Returns the item in one of a Pokemon's extra held item slots (2-4), or ITEM_NONE if
-// that Pokemon has nothing equipped there. Looked up by personality value so this
-// works the same regardless of whether the mon is in the party or its designated PC
-// box (see the equippedItems field on SaveBlock1 for the full design rationale).
-u16 GetMonEquippedItem(u32 personality, u8 slotNum)
+// it has no equipment table row (equipmentIndex 0) or nothing equipped in that slot.
+u16 GetMonEquippedItem(u8 equipmentIndex, u8 slotNum)
 {
-    s32 index = FindEquippedItemsEntry(personality);
-    if (index == -1)
+    if (equipmentIndex == 0 || equipmentIndex >= MON_EQUIPPED_ITEMS_COUNT)
         return ITEM_NONE;
 
     switch (slotNum)
     {
     case 2:
-        return gPokemonStoragePtr->equippedItems[index].itemSlot2;
+        return gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot2;
     case 3:
-        return gPokemonStoragePtr->equippedItems[index].itemSlot3;
+        return gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot3;
     case 4:
-        return gPokemonStoragePtr->equippedItems[index].itemSlot4;
+        return gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot4;
     default:
         return ITEM_NONE;
     }
 }
 
-// Called when a Pokemon with equipped items (slots 2-4) is deposited into any PC box
-// other than the designated "equipment" box (Box 1, index 0). Since only the party and
-// Box 1 preserve equipped items, moving a mon anywhere else would otherwise silently
-// strand its items in a now-orphaned table entry -- instead, each equipped item is
-// returned to the player's Bag and its slot cleared, matching how held Mail gets
-// returned to the Bag when a mon carrying it is deposited.
-// If the Bag can't accept an item (e.g. that pocket is completely full), that specific
-// slot is deliberately left as-is rather than the item being silently lost -- it'll
-// simply still show as equipped until the player has Bag space and moves the mon again.
-void ReturnMonEquippedItemsToBag(u32 personality)
+// Scans every Pokemon that could hold an equipment table row -- the full party and
+// every PC box -- to find the lowest row index not currently claimed by any of them.
+// This intentionally avoids a separate "free list": a row becomes reusable the moment
+// no Pokemon references it anymore (e.g. after a release), with nothing extra to keep
+// in sync. This is only ever called when a mon equips something for the first time
+// (not a hot path), so an O(n) scan over a few hundred mons is not a concern.
+// Returns 0 (meaning "table full") if every row is claimed.
+static u8 FindFreeEquipmentIndex(void)
 {
-    s32 index = FindEquippedItemsEntry(personality);
-    if (index == -1)
-        return; // nothing equipped, nothing to do
+    bool8 used[MON_EQUIPPED_ITEMS_COUNT] = {FALSE};
+    u32 i, j;
+    u8 index;
 
-    struct MonEquippedItems *entry = &gPokemonStoragePtr->equippedItems[index];
+    for (i = 0; i < PARTY_SIZE; i++)
+    {
+        index = GetMonData(&gPlayerParty[i], MON_DATA_EQUIPMENT_INDEX);
+        if (index != 0 && index < MON_EQUIPPED_ITEMS_COUNT)
+            used[index] = TRUE;
+    }
+
+    for (i = 0; i < TOTAL_BOXES_COUNT; i++)
+    {
+        for (j = 0; j < IN_BOX_COUNT; j++)
+        {
+            index = GetBoxMonData(&gPokemonStoragePtr->boxes[i][j], MON_DATA_EQUIPMENT_INDEX);
+            if (index != 0 && index < MON_EQUIPPED_ITEMS_COUNT)
+                used[index] = TRUE;
+        }
+    }
+
+    for (index = 1; index < MON_EQUIPPED_ITEMS_COUNT; index++)
+    {
+        if (!used[index])
+            return index;
+    }
+    return 0; // every row is claimed
+}
+
+// Called when a Pokemon with equipped items (slots 2-4) is being permanently removed
+// from the game (currently: released from the PC). Returns each equipped item to the
+// player's Bag and frees the table row, so nothing is silently destroyed -- matching
+// how held Mail is returned to the Bag when a mon carrying it is released.
+// If the Bag can't accept an item (e.g. that pocket is completely full), that specific
+// slot is deliberately left as-is rather than the item being silently lost. Since the
+// caller is about to delete the mon regardless, a leftover slot in this rare case is
+// orphaned (harmless -- FindFreeEquipmentIndex will simply never see it as in-use again
+// once the mon is gone) rather than a real correctness problem.
+void ReturnMonEquippedItemsToBag(u8 equipmentIndex)
+{
+    struct MonEquippedItems *entry;
+
+    if (equipmentIndex == 0 || equipmentIndex >= MON_EQUIPPED_ITEMS_COUNT)
+        return;
+
+    entry = &gPokemonStoragePtr->equippedItems[equipmentIndex];
 
     if (entry->itemSlot2 != ITEM_NONE && AddBagItem(entry->itemSlot2, 1))
         entry->itemSlot2 = ITEM_NONE;
@@ -3981,25 +4005,23 @@ void ReturnMonEquippedItemsToBag(u32 personality)
         entry->itemSlot3 = ITEM_NONE;
     if (entry->itemSlot4 != ITEM_NONE && AddBagItem(entry->itemSlot4, 1))
         entry->itemSlot4 = ITEM_NONE;
-
-    if (entry->itemSlot2 == ITEM_NONE && entry->itemSlot3 == ITEM_NONE && entry->itemSlot4 == ITEM_NONE)
-        entry->personality = 0;
 }
 
 // Assigns an item to one of a Pokemon's 4 held item slots. slotNum is 1-4;
 // slot 1 is the vanilla held item (still stored directly on the mon, unaffected by
-// any of this), slots 2-4 go through the equippedItems lookup table instead.
+// any of this), slots 2-4 go through the equippedItems table instead, addressed via
+// this specific mon's own equipmentIndex field.
 // Returns FALSE (and does nothing) if:
 //  - that Pokemon already holds this exact item in a different slot (no duplicates), or
-//  - a new table entry is needed (this mon has never had anything equipped before) but
-//    the table is full (all MON_EQUIPPED_ITEMS_COUNT slots already used by other mons)
+//  - a new table row is needed (this mon has never had anything equipped before) but
+//    every row is already claimed by other mons (see FindFreeEquipmentIndex)
 // ITEM_NONE is exempt from the duplicate check, since clearing a slot should always work.
 // Note: this only writes the data -- it doesn't check IsItemSlotUnlocked, so it's
 // safe to assign a slot 2/3/4 item to a mon before it's actually unlocked (the item
 // will simply sit there inactive until the level/Shiny requirement is met).
 bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item)
 {
-    u32 personality = GetMonData(mon, MON_DATA_PERSONALITY);
+    u8 equipmentIndex = GetMonData(mon, MON_DATA_EQUIPMENT_INDEX);
 
     if (slotNum == 1)
     {
@@ -4015,46 +4037,54 @@ bool32 SetMonItemSlot(struct Pokemon *mon, u8 slotNum, u16 item)
         u16 mainItem = GetMonData(mon, MON_DATA_HELD_ITEM);
         if (mainItem == item)
             return FALSE;
-        if (slotNum != 2 && GetMonEquippedItem(personality, 2) == item)
+        if (slotNum != 2 && GetMonEquippedItem(equipmentIndex, 2) == item)
             return FALSE;
-        if (slotNum != 3 && GetMonEquippedItem(personality, 3) == item)
+        if (slotNum != 3 && GetMonEquippedItem(equipmentIndex, 3) == item)
             return FALSE;
-        if (slotNum != 4 && GetMonEquippedItem(personality, 4) == item)
+        if (slotNum != 4 && GetMonEquippedItem(equipmentIndex, 4) == item)
             return FALSE;
     }
 
-    s32 index = FindEquippedItemsEntry(personality);
-    if (index == -1)
+    if (equipmentIndex == 0)
     {
         if (item == ITEM_NONE)
-            return TRUE; // nothing equipped, nothing to clear -- no entry needed
-        index = FindEquippedItemsEntry(0); // first free slot
-        if (index == -1)
+            return TRUE; // nothing equipped, nothing to clear -- no row needed
+
+        equipmentIndex = FindFreeEquipmentIndex();
+        if (equipmentIndex == 0)
             return FALSE; // table is full
-        gPokemonStoragePtr->equippedItems[index].personality = personality;
-        gPokemonStoragePtr->equippedItems[index].itemSlot2 = ITEM_NONE;
-        gPokemonStoragePtr->equippedItems[index].itemSlot3 = ITEM_NONE;
-        gPokemonStoragePtr->equippedItems[index].itemSlot4 = ITEM_NONE;
+
+        gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot2 = ITEM_NONE;
+        gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot3 = ITEM_NONE;
+        gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot4 = ITEM_NONE;
+
+        u8 data[2];
+        data[0] = equipmentIndex;
+        data[1] = 0;
+        SetMonData(mon, MON_DATA_EQUIPMENT_INDEX, data);
     }
 
     switch (slotNum)
     {
     case 2:
-        gPokemonStoragePtr->equippedItems[index].itemSlot2 = item;
+        gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot2 = item;
         break;
     case 3:
-        gPokemonStoragePtr->equippedItems[index].itemSlot3 = item;
+        gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot3 = item;
         break;
     case 4:
-        gPokemonStoragePtr->equippedItems[index].itemSlot4 = item;
+        gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot4 = item;
         break;
     }
 
-    // If all three extra slots are now empty, free the table entry for another mon.
-    if (gPokemonStoragePtr->equippedItems[index].itemSlot2 == ITEM_NONE
-     && gPokemonStoragePtr->equippedItems[index].itemSlot3 == ITEM_NONE
-     && gPokemonStoragePtr->equippedItems[index].itemSlot4 == ITEM_NONE)
-        gPokemonStoragePtr->equippedItems[index].personality = 0;
+    // If all three extra slots are now empty, free this row for another mon to claim.
+    if (gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot2 == ITEM_NONE
+     && gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot3 == ITEM_NONE
+     && gPokemonStoragePtr->equippedItems[equipmentIndex].itemSlot4 == ITEM_NONE)
+    {
+        u8 data[2] = {0, 0};
+        SetMonData(mon, MON_DATA_EQUIPMENT_INDEX, data);
+    }
 
     return TRUE;
 }
@@ -4704,6 +4734,9 @@ u32 GetBoxMonData3(struct BoxPokemon *boxMon, s32 field, u8 *data)
         case MON_DATA_HELD_ITEM:
             retVal = GetSubstruct0(boxMon)->heldItem;
             break;
+        case MON_DATA_EQUIPMENT_INDEX:
+            retVal = GetSubstruct0(boxMon)->equipmentIndex;
+            break;
         case MON_DATA_EXP:
             retVal = GetSubstruct0(boxMon)->experience;
             break;
@@ -5218,6 +5251,9 @@ void SetBoxMonData(struct BoxPokemon *boxMon, s32 field, const void *dataArg)
         }
         case MON_DATA_HELD_ITEM:
             SET16(GetSubstruct0(boxMon)->heldItem);
+            break;
+        case MON_DATA_EQUIPMENT_INDEX:
+            SET8(GetSubstruct0(boxMon)->equipmentIndex);
             break;
         case MON_DATA_EXP:
             SET32(GetSubstruct0(boxMon)->experience);
@@ -6106,9 +6142,9 @@ void PokemonToBattleMon(struct Pokemon *src, struct BattlePokemon *dst)
 
     dst->species = GetMonData(src, MON_DATA_SPECIES);
     dst->item = GetMonData(src, MON_DATA_HELD_ITEM);
-    dst->itemSlot2 = GetMonEquippedItem(GetMonData(src, MON_DATA_PERSONALITY), 2);
-    dst->itemSlot3 = GetMonEquippedItem(GetMonData(src, MON_DATA_PERSONALITY), 3);
-    dst->itemSlot4 = GetMonEquippedItem(GetMonData(src, MON_DATA_PERSONALITY), 4);
+    dst->itemSlot2 = GetMonEquippedItem(GetMonData(src, MON_DATA_EQUIPMENT_INDEX), 2);
+    dst->itemSlot3 = GetMonEquippedItem(GetMonData(src, MON_DATA_EQUIPMENT_INDEX), 3);
+    dst->itemSlot4 = GetMonEquippedItem(GetMonData(src, MON_DATA_EQUIPMENT_INDEX), 4);
     dst->ppBonuses = GetMonData(src, MON_DATA_PP_BONUSES);
     dst->friendship = GetMonData(src, MON_DATA_FRIENDSHIP);
     dst->experience = GetMonData(src, MON_DATA_EXP);
