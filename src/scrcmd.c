@@ -3,6 +3,7 @@
 #include "battle_setup.h"
 #include "battle_util.h"
 #include "berry.h"
+#include "vault_hunter.h"
 #include "clock.h"
 #include "coins.h"
 #include "contest.h"
@@ -752,6 +753,14 @@ bool8 ScrCmd_setflag(struct ScriptContext *ctx)
     Script_RequestEffects(SCREFF_V1 | SCREFF_SAVE);
 
     FlagSet(flagId);
+
+    // Vault Hunter passive progression is tied to badges. Hooked here rather than
+    // in each individual gym's map script -- every gym across every region sets
+    // its badge flag via this same setflag command, so this single hook covers
+    // all of them without needing to touch (or risk missing) any gym script.
+    if (flagId >= FLAG_BADGE01_GET && flagId <= FLAG_BADGE08_GET)
+        TryAdvanceVaultHunterPassivesForBadge(flagId - FLAG_BADGE01_GET + 1);
+
     return FALSE;
 }
 

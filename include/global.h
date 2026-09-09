@@ -691,7 +691,15 @@ struct SaveBlock2
              //u16 padding1:4;
              //u16 padding2;
     /*0x18*/ struct Pokedex pokedex;
-    /*0x90*/ u8 filler_90[0x8];
+    // Vault Hunter passive system. Repurposes what was previously unused filler
+    // space (filler_90[0x8]) -- same total byte size as before, so this costs zero
+    // additional save space. See include/vault_hunter.h for the full data model.
+    /*0x90*/ u8 vaultHunterId; // which Vault Hunter the player chose (see enum VaultHunterId)
+    /*0x91*/ u8 unlockedPassives; // bitmask, one bit per passive slot (0-2)
+    /*0x92*/ u8 passiveTier; // 0 = nothing unlocked yet; 1-3 once the first passive unlocks
+    /*0x93*/ u8 activePassiveSlot; // which passive (0-2) is currently active; 0xFF = none yet
+    /*0x94*/ u8 pendingPassiveUnlocks; // owed but not yet chosen by the player -- see below
+    /*0x95*/ u8 filler_95[0x3];
     /*0x98*/ struct Time localTimeOffset;
     /*0xA0*/ struct Time lastBerryTreeUpdate;
     /*0xA8*/ u32 gcnLinkFlags; // Read by Pokémon Colosseum/XD

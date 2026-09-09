@@ -54,3 +54,22 @@ gText_PkmnCenterChallenge_NoVisitsLeft:: @ tx_difficulty_challenge
     .string "Sorry, but you are playing with\n"
     .string "the POKéCENTER challenge!\p"
     .string "Good luck!{PAUSE_UNTIL_PRESS}$"
+
+gText_VaultHunter_UnlockPassivePrompt::
+	.string "You've earned a new Vault Hunter\n"
+	.string "passive!\p"
+	.string "Unlock {STR_VAR_1}?$"
+
+gText_VaultHunter_PassiveUnlocked::
+	.string "{STR_VAR_1} unlocked!$"
+
+gText_VaultHunter_SwitchActivePrompt::
+	.string "Would you like to change your\n"
+	.string "active Vault Hunter passive?$"
+
+gText_VaultHunter_MakeActivePrompt::
+	.string "Make {STR_VAR_1} your active\n"
+	.string "passive?$"
+
+gText_VaultHunter_PassiveActivated::
+	.string "{STR_VAR_1} is now active!$"

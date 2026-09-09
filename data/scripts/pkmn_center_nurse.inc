@@ -1,6 +1,12 @@
 Common_EventScript_PkmnCenterNurse::
 	lock
 	faceplayer
+	callnative Script_HasVaultHunterPassiveBusiness
+	goto_if_eq VAR_RESULT, TRUE, EventScript_VaultHunter_PassiveMenu
+	goto EventScript_PkmnCenterNurse_Main
+	end
+
+EventScript_PkmnCenterNurse_Main::
 	setvar VAR_0x8004, 0
 	specialvar VAR_RESULT, IsPokecenterChallengeActivated
     goto_if_eq VAR_RESULT, TRUE, EventScript_PkmnCenterNurse_PkmnCenterChallenge_NoVisits
@@ -11,6 +17,97 @@ Common_EventScript_PkmnCenterNurse::
 	goto_if_eq VAR_RESULT, YES, EventScript_PkmnCenterNurse_HealPkmn
 	goto_if_eq VAR_RESULT, NO, EventScript_PkmnCenterNurse_Goodbye
 	end
+
+@ --- Vault Hunter passive menu: pending unlock choice, or switching the active one.
+@ Uses VAR_0x8005 for the passive slot argument (VAR_0x8004 is already used by the
+@ Gold Card logic below, in EventScript_PkmnCenterNurse_Main).
+
+EventScript_VaultHunter_PassiveMenu::
+	callnative Script_HasPendingVaultHunterPassiveChoice
+	goto_if_eq VAR_RESULT, TRUE, EventScript_VaultHunter_OfferUnlock_Slot0
+	goto EventScript_VaultHunter_OfferSwitch
+
+EventScript_VaultHunter_OfferUnlock_Slot0::
+	setvar VAR_0x8005, 0
+	callnative Script_IsVaultHunterPassiveSlotLocked
+	goto_if_eq VAR_RESULT, FALSE, EventScript_VaultHunter_OfferUnlock_Slot1
+	callnative Script_BufferVaultHunterPassiveName
+	msgbox gText_VaultHunter_UnlockPassivePrompt, MSGBOX_YESNO
+	goto_if_eq VAR_RESULT, YES, EventScript_VaultHunter_DoUnlock
+	goto EventScript_VaultHunter_OfferUnlock_Slot1
+
+EventScript_VaultHunter_OfferUnlock_Slot1::
+	setvar VAR_0x8005, 1
+	callnative Script_IsVaultHunterPassiveSlotLocked
+	goto_if_eq VAR_RESULT, FALSE, EventScript_VaultHunter_OfferUnlock_Slot2
+	callnative Script_BufferVaultHunterPassiveName
+	msgbox gText_VaultHunter_UnlockPassivePrompt, MSGBOX_YESNO
+	goto_if_eq VAR_RESULT, YES, EventScript_VaultHunter_DoUnlock
+	goto EventScript_VaultHunter_OfferUnlock_Slot2
+
+EventScript_VaultHunter_OfferUnlock_Slot2::
+	setvar VAR_0x8005, 2
+	callnative Script_IsVaultHunterPassiveSlotLocked
+	@ Shouldn't normally reach here still locked (pending > 0 guarantees at least
+	@ one locked slot exists), but falls through safely to the main flow if so.
+	goto_if_eq VAR_RESULT, FALSE, EventScript_PkmnCenterNurse_Main
+	callnative Script_BufferVaultHunterPassiveName
+	msgbox gText_VaultHunter_UnlockPassivePrompt, MSGBOX_YESNO
+	goto_if_eq VAR_RESULT, YES, EventScript_VaultHunter_DoUnlock
+	goto EventScript_PkmnCenterNurse_Main
+
+EventScript_VaultHunter_DoUnlock::
+	callnative Script_ChooseVaultHunterPassiveUnlock
+	callnative Script_BufferVaultHunterPassiveName
+	msgbox gText_VaultHunter_PassiveUnlocked, MSGBOX_DEFAULT
+	waitmessage
+	goto EventScript_PkmnCenterNurse_Main
+
+EventScript_VaultHunter_OfferSwitch::
+	msgbox gText_VaultHunter_SwitchActivePrompt, MSGBOX_YESNO
+	goto_if_eq VAR_RESULT, NO, EventScript_PkmnCenterNurse_Main
+	setvar VAR_0x8005, 0
+	goto EventScript_VaultHunter_OfferSwitch_Slot0
+
+EventScript_VaultHunter_OfferSwitch_Slot0::
+	setvar VAR_0x8005, 0
+	callnative Script_IsVaultHunterPassiveSlotUnlocked
+	goto_if_eq VAR_RESULT, FALSE, EventScript_VaultHunter_OfferSwitch_Slot1
+	callnative Script_IsVaultHunterPassiveSlotActive
+	goto_if_eq VAR_RESULT, TRUE, EventScript_VaultHunter_OfferSwitch_Slot1
+	callnative Script_BufferVaultHunterPassiveName
+	msgbox gText_VaultHunter_MakeActivePrompt, MSGBOX_YESNO
+	goto_if_eq VAR_RESULT, YES, EventScript_VaultHunter_DoActivate
+	goto EventScript_VaultHunter_OfferSwitch_Slot1
+
+EventScript_VaultHunter_OfferSwitch_Slot1::
+	setvar VAR_0x8005, 1
+	callnative Script_IsVaultHunterPassiveSlotUnlocked
+	goto_if_eq VAR_RESULT, FALSE, EventScript_VaultHunter_OfferSwitch_Slot2
+	callnative Script_IsVaultHunterPassiveSlotActive
+	goto_if_eq VAR_RESULT, TRUE, EventScript_VaultHunter_OfferSwitch_Slot2
+	callnative Script_BufferVaultHunterPassiveName
+	msgbox gText_VaultHunter_MakeActivePrompt, MSGBOX_YESNO
+	goto_if_eq VAR_RESULT, YES, EventScript_VaultHunter_DoActivate
+	goto EventScript_VaultHunter_OfferSwitch_Slot2
+
+EventScript_VaultHunter_OfferSwitch_Slot2::
+	setvar VAR_0x8005, 2
+	callnative Script_IsVaultHunterPassiveSlotUnlocked
+	goto_if_eq VAR_RESULT, FALSE, EventScript_PkmnCenterNurse_Main
+	callnative Script_IsVaultHunterPassiveSlotActive
+	goto_if_eq VAR_RESULT, TRUE, EventScript_PkmnCenterNurse_Main
+	callnative Script_BufferVaultHunterPassiveName
+	msgbox gText_VaultHunter_MakeActivePrompt, MSGBOX_YESNO
+	goto_if_eq VAR_RESULT, YES, EventScript_VaultHunter_DoActivate
+	goto EventScript_PkmnCenterNurse_Main
+
+EventScript_VaultHunter_DoActivate::
+	callnative Script_SetActiveVaultHunterPassiveSlot
+	callnative Script_BufferVaultHunterPassiveName
+	msgbox gText_VaultHunter_PassiveActivated, MSGBOX_DEFAULT
+	waitmessage
+	goto EventScript_PkmnCenterNurse_Main
 
 EventScript_PkmnCenterNurse_Goodbye::
 	waitmessage

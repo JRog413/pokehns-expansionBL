@@ -1,6 +1,7 @@
 #include "global.h"
 #include "new_game.h"
 #include "random.h"
+#include "vault_hunter.h"
 #include "config/randomizer.h"
 #include "pokemon.h"
 #include "roamer.h"
@@ -227,6 +228,11 @@ void NewGameInitData(void)
 #endif
     gDifferentSaveFile = TRUE;
     gSaveBlock2Ptr->encryptionKey = 0;
+    // vaultHunterId/unlockedPassives/passiveTier all correctly default to 0 ("Zer0",
+    // nothing unlocked, tier 0) via the zero-init below, but activePassiveSlot needs
+    // an explicit value here: 0 is a real, valid slot index, so leaving it at its
+    // zero-init default would incorrectly look like slot 0 is already active.
+    gSaveBlock2Ptr->activePassiveSlot = PASSIVE_SLOT_NONE;
     ZeroPlayerPartyMons();
     ZeroEnemyPartyMons();
     ResetPokedex();

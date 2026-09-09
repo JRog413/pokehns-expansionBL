@@ -1,6 +1,7 @@
 #include "global.h"
 #include "trainer_pokemon_sprites.h"
 #include "bg.h"
+#include "vault_hunter.h"
 #include "constants/rgb.h"
 #include "constants/songs.h"
 #include "constants/trainers.h"
@@ -506,12 +507,14 @@ static void Task_NewGameHnsSpeech_ChooseGender(u8 taskId)
     case MALE:
         PlaySE(SE_SELECT);
         gSaveBlock2Ptr->playerGender = gender;
+        gSaveBlock2Ptr->vaultHunterId = VAULT_HUNTER_ZERO;
         NewGameHnsSpeech_ClearGenderWindow(1, 1);
         gTasks[taskId].func = Task_NewGameHnsSpeech_WhatsYourName;
         break;
     case FEMALE:
         PlaySE(SE_SELECT);
         gSaveBlock2Ptr->playerGender = gender;
+        gSaveBlock2Ptr->vaultHunterId = VAULT_HUNTER_MAYA;
         NewGameHnsSpeech_ClearGenderWindow(1, 1);
         gTasks[taskId].func = Task_NewGameHnsSpeech_WhatsYourName;
         break;
