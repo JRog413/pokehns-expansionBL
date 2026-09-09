@@ -3944,16 +3944,18 @@ u16 GetMonEquippedItem(u8 equipmentIndex, u8 slotNum)
 }
 
 // Scans every Pokemon that could hold an equipment table row -- the full party and
-// every PC box -- to find the lowest row index not currently claimed by any of them.
-// This intentionally avoids a separate "free list": a row becomes reusable the moment
-// no Pokemon references it anymore (e.g. after a release), with nothing extra to keep
-// in sync. This is only ever called when a mon equips something for the first time
-// (not a hot path), so an O(n) scan over a few hundred mons is not a concern.
+// Box 1 (the one designated "equipment" box; the deposit hook in
+// pokemon_storage_system.c guarantees no other box ever holds a nonzero
+// equipmentIndex) -- to find the lowest row index not currently claimed by any of
+// them. This intentionally avoids a separate "free list": a row becomes reusable the
+// moment no Pokemon references it anymore (e.g. after a release), with nothing extra
+// to keep in sync. This is only ever called when a mon equips something for the first
+// time (not a hot path), so an O(n) scan over ~36 mons is not a concern.
 // Returns 0 (meaning "table full") if every row is claimed.
 static u8 FindFreeEquipmentIndex(void)
 {
     bool8 used[MON_EQUIPPED_ITEMS_COUNT] = {FALSE};
-    u32 i, j;
+    u32 i;
     u8 index;
 
     for (i = 0; i < PARTY_SIZE; i++)
@@ -3963,14 +3965,11 @@ static u8 FindFreeEquipmentIndex(void)
             used[index] = TRUE;
     }
 
-    for (i = 0; i < TOTAL_BOXES_COUNT; i++)
+    for (i = 0; i < IN_BOX_COUNT; i++)
     {
-        for (j = 0; j < IN_BOX_COUNT; j++)
-        {
-            index = GetBoxMonData(&gPokemonStoragePtr->boxes[i][j], MON_DATA_EQUIPMENT_INDEX);
-            if (index != 0 && index < MON_EQUIPPED_ITEMS_COUNT)
-                used[index] = TRUE;
-        }
+        index = GetBoxMonData(&gPokemonStoragePtr->boxes[0][i], MON_DATA_EQUIPMENT_INDEX);
+        if (index != 0 && index < MON_EQUIPPED_ITEMS_COUNT)
+            used[index] = TRUE;
     }
 
     for (index = 1; index < MON_EQUIPPED_ITEMS_COUNT; index++)
@@ -3982,14 +3981,20 @@ static u8 FindFreeEquipmentIndex(void)
 }
 
 // Called when a Pokemon with equipped items (slots 2-4) is being permanently removed
-// from the game (currently: released from the PC). Returns each equipped item to the
-// player's Bag and frees the table row, so nothing is silently destroyed -- matching
-// how held Mail is returned to the Bag when a mon carrying it is released.
-// If the Bag can't accept an item (e.g. that pocket is completely full), that specific
-// slot is deliberately left as-is rather than the item being silently lost. Since the
-// caller is about to delete the mon regardless, a leftover slot in this rare case is
-// orphaned (harmless -- FindFreeEquipmentIndex will simply never see it as in-use again
-// once the mon is gone) rather than a real correctness problem.
+// from the game (currently: released from the PC) or deposited outside its designated
+// equipment box (see the deposit hook in pokemon_storage_system.c). Returns each
+// equipped item to the player's Bag if there's room, or PC Item Storage if the Bag's
+// relevant pocket is full, and frees the table row -- matching how held Mail is
+// returned to the Bag when a mon carrying it is released. PC Item Storage effectively
+// never fills up in practice, so an item only stays stuck in an orphaned slot in the
+// (extremely unlikely) case that both destinations refuse it.
+static bool32 ReturnItemToBagOrPC(enum Item item)
+{
+    if (AddBagItem(item, 1))
+        return TRUE;
+    return AddPCItem(item, 1);
+}
+
 void ReturnMonEquippedItemsToBag(u8 equipmentIndex)
 {
     struct MonEquippedItems *entry;
@@ -3999,11 +4004,11 @@ void ReturnMonEquippedItemsToBag(u8 equipmentIndex)
 
     entry = &gPokemonStoragePtr->equippedItems[equipmentIndex];
 
-    if (entry->itemSlot2 != ITEM_NONE && AddBagItem(entry->itemSlot2, 1))
+    if (entry->itemSlot2 != ITEM_NONE && ReturnItemToBagOrPC(entry->itemSlot2))
         entry->itemSlot2 = ITEM_NONE;
-    if (entry->itemSlot3 != ITEM_NONE && AddBagItem(entry->itemSlot3, 1))
+    if (entry->itemSlot3 != ITEM_NONE && ReturnItemToBagOrPC(entry->itemSlot3))
         entry->itemSlot3 = ITEM_NONE;
-    if (entry->itemSlot4 != ITEM_NONE && AddBagItem(entry->itemSlot4, 1))
+    if (entry->itemSlot4 != ITEM_NONE && ReturnItemToBagOrPC(entry->itemSlot4))
         entry->itemSlot4 = ITEM_NONE;
 }
 

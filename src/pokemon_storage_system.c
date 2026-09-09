@@ -6597,9 +6597,24 @@ static void SetPlacedMonData(u8 boxId, u8 position)
     }
     else
     {
-        // Equipped items (slots 2-4) are addressed by each mon's own equipmentIndex
-        // field on BoxPokemon (see include/pokemon.h), so they travel automatically
-        // with this struct-copy into any box -- no special-casing needed here anymore.
+        // Equipped items (slots 2-4) only persist through the party and Box 1
+        // (index 0), the designated "equipment" box. Depositing into any other box
+        // returns them to the Bag (or PC Item Storage if the Bag's full) instead of
+        // leaving them attached to a mon that's no longer in an eligible location.
+        // The mon's own equipmentIndex must be cleared here too, before it's copied
+        // into the box below -- otherwise it would keep pointing at a table row
+        // whose items were just returned, permanently wasting that row instead of
+        // freeing it for another mon to actually use.
+        if (boxId != 0)
+        {
+            u8 equipmentIndex = GetMonData(&sStorage->movingMon, MON_DATA_EQUIPMENT_INDEX);
+            if (equipmentIndex != 0)
+            {
+                u8 data[2] = {0, 0};
+                ReturnMonEquippedItemsToBag(equipmentIndex);
+                SetMonData(&sStorage->movingMon, MON_DATA_EQUIPMENT_INDEX, data);
+            }
+        }
         SetBoxMonAt(boxId, position, &sStorage->movingMon.box);
         SetMonFormPSS(&gPokemonStoragePtr->boxes[boxId][position], FORM_CHANGE_DEPOSIT);
     }

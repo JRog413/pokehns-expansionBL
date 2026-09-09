@@ -1204,14 +1204,17 @@ struct MomSavingsData
 // encrypted union) is not free and blows the GBA's fixed save-sector budgets almost
 // immediately once multiplied across 420+ PC box slots. Because the index lives on
 // BoxPokemon itself, it (and therefore the mon's equipment) travels automatically
-// through every existing operation that moves or copies a Pokemon -- party<->PC,
-// box<->box -- with no separate hooks required to keep them correctly associated.
-// 63 (the maximum a 6-bit field can address, reserving 0 for "none") is not an
-// arbitrary number: it's what a real, measured compile confirmed fits comfortably
-// within PokemonStorage's spare save-sector space at this entry size, so this covers
-// several times the entire active party, though not literally every Pokemon that
-// could ever exist across all PC boxes simultaneously.
-#define MON_EQUIPPED_ITEMS_COUNT 64 // valid indices are 1-63; index 0 means "none"
+// through the party and its one designated "equipment" box (Box 1, index 0) via every
+// existing operation that moves or copies a Pokemon between them -- no separate hooks
+// required to keep them correctly associated there. Depositing into any other box
+// intentionally does NOT carry equipment along -- see the deposit hook in
+// pokemon_storage_system.c, which returns those items to the Bag/PC Item Storage and
+// clears the mon's index first, before it's copied into the box.
+// Sized for a full party (6) plus one full box (30) with equipment simultaneously --
+// 37 (36 usable rows, reserving index 0 for "none") deliberately matches that design
+// intent exactly, rather than claiming the larger headroom the 6-bit index could
+// technically address (up to 63) but the game would never actually use.
+#define MON_EQUIPPED_ITEMS_COUNT 37 // valid indices are 1-36; index 0 means "none"
 
 struct MonEquippedItems
 {

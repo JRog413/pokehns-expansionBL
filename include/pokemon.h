@@ -144,9 +144,12 @@ struct PokemonSubstruct0
     // BoxPokemon, which (confirmed via direct measurement) costs a full 4 bytes per
     // instance due to the alignment requirement of the `secure` union below, and at
     // 420+ BoxPokemon instances in PokemonStorage, blows the save-sector budget almost
-    // immediately. Because this lives on BoxPokemon itself (just inside the encrypted
-    // substruct rather than the plain section), it's still copied automatically by
-    // every existing operation that moves or duplicates a Pokemon.
+    // immediately. Because this lives on BoxPokemon itself, it's copied automatically
+    // by every existing operation that moves or duplicates a Pokemon -- which is what
+    // keeps this correctly attached while the mon stays within the party or Box 1
+    // (the designated "equipment" box). Depositing into any other box is a deliberate
+    // exception: the deposit hook in pokemon_storage_system.c explicitly clears this
+    // field first, after returning the equipped items to the Bag/PC Item Storage.
     u16 equipmentIndex:6;
     u32 experience:21;
     u32 nickname11:8; // 11th character of nickname.
