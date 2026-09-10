@@ -6,22 +6,21 @@
 #include "script.h"
 #include "event_data.h"
 
-// PLACEHOLDER NAMES: the original task spec (several turns back) defined specific
-// Borderlands-themed names for all 6 passives, but that exact text isn't reliably
-// available to reference right now. Rather than risk confidently inventing or
-// misremembering names that don't match what was actually specified, these are
-// clearly-labeled placeholders -- swap in the real names here once confirmed.
+// Final names, confirmed with the user. Slot order for each Vault Hunter matches
+// the order they're described in the original spec:
+// Zer0:  0 = crit specialization, 1 = evasion/speed, 2 = execute/finisher damage
+// Maya:  0 = kill-triggered healing, 1 = status/control, 2 = defensive
 static const u8 *const sVaultHunterPassiveNames[2][VAULT_HUNTER_PASSIVE_COUNT] =
 {
     [VAULT_HUNTER_ZERO] = {
-        COMPOUND_STRING("Zer0 Passive 1 (PLACEHOLDER)"),
-        COMPOUND_STRING("Zer0 Passive 2 (PLACEHOLDER)"),
-        COMPOUND_STRING("Zer0 Passive 3 (PLACEHOLDER)"),
+        COMPOUND_STRING("0ne Sh0t, 0ne Kill"),
+        COMPOUND_STRING("0utmane0uver"),
+        COMPOUND_STRING("0verkill"),
     },
     [VAULT_HUNTER_MAYA] = {
-        COMPOUND_STRING("Maya Passive 1 (PLACEHOLDER)"),
-        COMPOUND_STRING("Maya Passive 2 (PLACEHOLDER)"),
-        COMPOUND_STRING("Maya Passive 3 (PLACEHOLDER)"),
+        COMPOUND_STRING("Soul Harvest"),
+        COMPOUND_STRING("Ruin"),
+        COMPOUND_STRING("Phase Shield"),
     },
 };
 
