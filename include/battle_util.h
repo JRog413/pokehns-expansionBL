@@ -423,6 +423,7 @@ void SetWrapTurns(enum BattlerId battler, enum HoldEffect holdEffect);
 bool32 ChangeOrderTargetAfterAttacker(void);
 void TryUpdateEvolutionTracker(enum EvolutionConditions evolutionCondition, u32 upAmount, enum Move usedMove);
 bool32 CanUseMoveConsecutively(enum BattlerId battler);
+u32 NumFaintedBattlersByAttacker(enum BattlerId battlerAtk);
 void TryResetConsecutiveUseCounter(enum BattlerId battler);
 void SetOrClearRageVolatile(void);
 enum BattlerId GetTargetBySlot(enum BattlerId battlerAtk, enum BattlerId battlerDef);

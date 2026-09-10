@@ -1,5 +1,6 @@
 #include "global.h"
 #include "battle.h"
+#include "vault_hunter.h"
 #include "battle_environment.h"
 #include "battle_hold_effects.h"
 #include "challenge_menu.h"
@@ -3237,6 +3238,39 @@ static enum MoveEndResult MoveEndAbilityEffectFoesFainted(void)
 
     if (AbilityBattleEffects(ABILITYEFFECT_MOVE_END_FOES_FAINTED, gBattlerAttacker, GetBattlerAbility(gBattlerAttacker), gCurrentMove, TRUE))
         result = MOVEEND_RESULT_RUN_SCRIPT;
+
+    // Soul Harvest (Maya): heals a percentage of max HP whenever this Pokemon's
+    // move knocks out an opposing Pokemon. Deliberately separate from the ability
+    // switch above (in battle_util.c) since this isn't an ability -- checked here
+    // instead, right alongside it, since this is the same "did the attacker's move
+    // just faint a foe" moment those on-KO abilities (Moxie etc.) check.
+    if (result == MOVEEND_RESULT_CONTINUE
+     && IsBattlerAlive(gBattlerAttacker) && !NoAliveMonsForEitherParty()
+     && IsVaultHunterPassiveActiveForBattler(gBattlerAttacker, MAYA_PASSIVE_SOUL_HARVEST)
+     && NumFaintedBattlersByAttacker(gBattlerAttacker)
+     && !IsBattlerAtMaxHp(gBattlerAttacker))
+    {
+        u32 maxHp = GetNonDynamaxMaxHP(gBattlerAttacker);
+        u32 healAmount = 0;
+        switch (GetVaultHunterPassiveTier())
+        {
+        case 1:
+            healAmount = maxHp / 10; // 10%
+            break;
+        case 2:
+            healAmount = (maxHp * 15) / 100; // 15%
+            break;
+        case 3:
+            healAmount = maxHp / 5; // 20%
+            break;
+        }
+        if (healAmount > 0)
+        {
+            SetHealAmount(gBattlerAttacker, healAmount);
+            BattleScriptCall(BattleScript_VaultHunterSoulHarvestRet);
+            result = MOVEEND_RESULT_RUN_SCRIPT;
+        }
+    }
 
     gBattleScripting.moveendState++;
     return result;

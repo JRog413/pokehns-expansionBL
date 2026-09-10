@@ -5,6 +5,7 @@
 #include "field_message_box.h"
 #include "script.h"
 #include "event_data.h"
+#include "battle.h"
 
 // Final names, confirmed with the user. Slot order for each Vault Hunter matches
 // the order they're described in the original spec:
@@ -49,6 +50,17 @@ u8 GetActiveVaultHunterPassiveSlot(void)
 bool32 IsVaultHunterPassiveActive(u8 slot)
 {
     return IsVaultHunterPassiveUnlocked(slot) && GetActiveVaultHunterPassiveSlot() == slot;
+}
+
+// The one check every battle-effect hook needs: is this specific battler both (a)
+// the player's own side (only the player has a Vault Hunter -- this never applies
+// to wild Pokemon or trainer opponents) and (b) currently benefiting from this
+// specific passive being the one active slot. All 6 passive effects in
+// battle_util.c/battle_main.c/etc. go through this single function rather than
+// each reimplementing the same two checks.
+bool32 IsVaultHunterPassiveActiveForBattler(u8 battler, u8 slot)
+{
+    return IsOnPlayerSide(battler) && IsVaultHunterPassiveActive(slot);
 }
 
 // Fails (does nothing, returns FALSE) if the requested slot isn't unlocked yet --

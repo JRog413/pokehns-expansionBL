@@ -1,5 +1,6 @@
 #include "global.h"
 #include "battle.h"
+#include "vault_hunter.h"
 #include "battle_anim.h"
 #include "battle_arena.h"
 #include "battle_environment.h"
@@ -7820,6 +7821,60 @@ static inline uq4_12_t GetDefenderItemsModifier(struct BattleContext *ctx)
 // https://bulbapedia.bulbagarden.net/wiki/Damage#Generation_V_onward
 // Please Note: Fixed Point Multiplication is not associative.
 // The order of operations is relevant.
+// 0verkill (Zer0) and Phase Shield (Maya) are both simple damage multipliers with
+// no ability-vs-ability speed-order interactions to worry about, unlike the
+// modifiers above -- so this is added once, unconditionally, rather than needing
+// to be split across the if/else speed-order branches like those are.
+static inline uq4_12_t GetVaultHunterPassiveModifier(struct BattleContext *ctx)
+{
+    uq4_12_t modifier = UQ_4_12(1.0);
+
+    if (IsVaultHunterPassiveActiveForBattler(ctx->battlerAtk, ZERO_PASSIVE_OVERKILL)
+     && !IsBattlerAtMaxHp(ctx->battlerDef))
+    {
+        u32 curHp = gBattleMons[ctx->battlerDef].hp;
+        u32 maxHp = gBattleMons[ctx->battlerDef].maxHP;
+        if (curHp * 2 < maxHp) // target below 50% HP
+        {
+            switch (GetVaultHunterPassiveTier())
+            {
+            case 1:
+                modifier = uq4_12_multiply(modifier, UQ_4_12(1.08));
+                break;
+            case 2:
+                modifier = uq4_12_multiply(modifier, UQ_4_12(1.12));
+                break;
+            case 3:
+                modifier = uq4_12_multiply(modifier, UQ_4_12(1.15));
+                break;
+            }
+        }
+    }
+
+    if (IsVaultHunterPassiveActiveForBattler(ctx->battlerDef, MAYA_PASSIVE_PHASE_SHIELD))
+    {
+        u32 curHp = gBattleMons[ctx->battlerDef].hp;
+        u32 maxHp = gBattleMons[ctx->battlerDef].maxHP;
+        if (curHp * 2 > maxHp) // defender above 50% HP
+        {
+            switch (GetVaultHunterPassiveTier())
+            {
+            case 1:
+                modifier = uq4_12_multiply(modifier, UQ_4_12(0.95));
+                break;
+            case 2:
+                modifier = uq4_12_multiply(modifier, UQ_4_12(0.92));
+                break;
+            case 3:
+                modifier = uq4_12_multiply(modifier, UQ_4_12(0.90));
+                break;
+            }
+        }
+    }
+
+    return modifier;
+}
+
 static inline uq4_12_t GetOtherModifiers(struct BattleContext *ctx)
 {
     uq4_12_t finalModifier = UQ_4_12(1.0);
@@ -7834,6 +7889,7 @@ static inline uq4_12_t GetOtherModifiers(struct BattleContext *ctx)
     DAMAGE_MULTIPLY_MODIFIER(GetAirborneModifier(ctx->move, ctx->battlerDef));
     DAMAGE_MULTIPLY_MODIFIER(GetScreensModifier(ctx));
     DAMAGE_MULTIPLY_MODIFIER(GetCollisionCourseElectroDriftModifier(ctx->move, ctx->typeEffectivenessModifier));
+    DAMAGE_MULTIPLY_MODIFIER(GetVaultHunterPassiveModifier(ctx));
 
     if (unmodifiedAttackerSpeed >= unmodifiedDefenderSpeed)
     {

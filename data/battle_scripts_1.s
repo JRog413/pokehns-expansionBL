@@ -7177,6 +7177,17 @@ BattleScript_ItemHealHP_Ret::
 	datahpupdate BS_ATTACKER, PASSIVE_HP_UPDATE
 	return
 
+BattleScript_VaultHunterSoulHarvestRet::
+	printstring STRINGID_VAULTHUNTERSOULHARVESTHEAL
+	waitmessage B_WAIT_TIME_LONG
+	healthbarupdate BS_ATTACKER, PASSIVE_HP_UPDATE
+	datahpupdate BS_ATTACKER, PASSIVE_HP_UPDATE
+	return
+
+BattleScript_VaultHunterSoulHarvest::
+	call BattleScript_VaultHunterSoulHarvestRet
+	end2
+
 BattleScript_SelectingNotAllowedMoveChoiceItem::
 	printselectionstring STRINGID_ITEMALLOWSONLYYMOVE
 	endselectionscript

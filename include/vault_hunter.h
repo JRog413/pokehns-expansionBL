@@ -24,6 +24,15 @@ enum VaultHunterPassiveSlot
 };
 #define PASSIVE_SLOT_NONE 0xFF
 
+// Named per-passive slot constants -- "slot 0" is ambiguous across two different
+// Vault Hunters, so battle-effect code should reference these instead.
+#define ZERO_PASSIVE_ONE_SHOT_ONE_KILL VH_PASSIVE_SLOT_0 // crit chance/damage
+#define ZERO_PASSIVE_OUTMANEUVER       VH_PASSIVE_SLOT_1 // evasion, move-first-on-dodge
+#define ZERO_PASSIVE_OVERKILL          VH_PASSIVE_SLOT_2 // damage vs low-HP targets
+#define MAYA_PASSIVE_SOUL_HARVEST      VH_PASSIVE_SLOT_0 // KO-triggered healing
+#define MAYA_PASSIVE_RUIN              VH_PASSIVE_SLOT_1 // status-triggered secondary effect
+#define MAYA_PASSIVE_PHASE_SHIELD      VH_PASSIVE_SLOT_2 // damage reduction above 50% HP
+
 #define VAULT_HUNTER_PASSIVE_TIER_MAX 3
 
 // Public API
@@ -33,6 +42,7 @@ u8 GetVaultHunterPassiveTier(void); // 0 = nothing unlocked yet, else the curren
 u8 GetActiveVaultHunterPassiveSlot(void); // PASSIVE_SLOT_NONE if nothing active yet
 bool32 SetActiveVaultHunterPassiveSlot(u8 slot); // fails (returns FALSE) if that slot isn't unlocked
 bool32 IsVaultHunterPassiveActive(u8 slot); // convenience: unlocked AND currently selected
+bool32 IsVaultHunterPassiveActiveForBattler(u8 battler, u8 slot);
 void UnlockVaultHunterPassive(u8 slot);
 void SetVaultHunterPassiveTier(u8 tier);
 
