@@ -508,7 +508,12 @@ struct BattlerState
     u16 fainted:1;
     u16 isFirstTurn:2;
     u16 cheatingDeathCounter:2;
-    u16 padding:10;
+    // 0utmaneOuver (Zer0): set when this battler successfully evades an attack;
+    // checked (and cleared) once at the start of its next turn to grant priority
+    // over even normal-priority moves. Repurposes what was padding, so this costs
+    // nothing extra -- same reasoning as isFirstTurn/cheatingDeathCounter above.
+    u16 movesFirstNextTurn:1;
+    u16 padding:9;
 };
 
 struct PartyState

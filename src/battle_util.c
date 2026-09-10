@@ -7884,6 +7884,18 @@ static inline uq4_12_t GetVaultHunterPassiveModifier(struct BattleContext *ctx)
         }
     }
 
+    // 0utmaneOuver (Zer0): moves that explicitly bypass the accuracy check
+    // entirely (e.g. Swift) deal 10% less damage while this passive is active --
+    // not every 100%-accuracy move, only ones that skip the check altogether.
+    // CHECK_TRIGGER means this reads the same underlying logic DoesMoveMissTarget
+    // itself uses without running any scripts or setting flags, so it's safe to
+    // call here during damage calculation.
+    if (IsVaultHunterPassiveActiveForBattler(ctx->battlerAtk, ZERO_PASSIVE_OUTMANEUVER)
+     && CanMoveSkipAccuracyCalc(ctx->battlerAtk, ctx->battlerDef, ctx->abilityAtk, ctx->abilityDef, ctx->move, CHECK_TRIGGER))
+    {
+        modifier = uq4_12_multiply(modifier, UQ_4_12(0.9));
+    }
+
     return modifier;
 }
 
@@ -10748,6 +10760,29 @@ u32 GetTotalAccuracy(enum BattlerId battlerAtk, enum BattlerId battlerDef, enum 
         break;
     }
 
+    // 0utmaneOuver (Zer0): +5/8/12% evasion. Matches the unconditional pattern of
+    // the ability-based evasion checks just above (Sand Veil, Snow Cloak) rather
+    // than the stat-stage evasion computed earlier in this function, which
+    // Foresight/Miracle Eye/MoveIgnoresDefenseEvasionStages can bypass -- those
+    // abilities don't check those bypasses either, so this stays consistent with
+    // how this codebase already treats ability-granted evasion as separate from
+    // stat-stage evasion.
+    if (IsVaultHunterPassiveActiveForBattler(battlerDef, ZERO_PASSIVE_OUTMANEUVER))
+    {
+        switch (GetVaultHunterPassiveTier())
+        {
+        case 1:
+            calc = (calc * 95) / 100; // -5% accuracy = +5% evasion
+            break;
+        case 2:
+            calc = (calc * 92) / 100; // -8%
+            break;
+        case 3:
+            calc = (calc * 88) / 100; // -12%
+            break;
+        }
+    }
+
     // Attacker's ally's ability
     enum BattlerId atkAlly = BATTLE_PARTNER(battlerAtk);
     switch (GetBattlerAbility(atkAlly))
@@ -10883,7 +10918,19 @@ bool32 DoesMoveMissTarget(struct BattleCalcValues *cv)
                         cv->holdEffects[cv->battlerAtk],
                         cv->holdEffects[cv->battlerDef]
                     );
-    return !RandomPercentage(RNG_ACCURACY, accuracy);
+    bool32 missed = !RandomPercentage(RNG_ACCURACY, accuracy);
+
+    // 0utmaneOuver (Zer0): successfully evading an attack grants priority on this
+    // battler's next turn, even over normal-priority moves. This function is the
+    // single centralized place a "normal" (accuracy-check-based) miss gets
+    // determined, so it's the right spot to detect the dodge itself. Moves that
+    // bypass the accuracy check entirely (handled above, via
+    // CanMoveSkipAccuracyCalc) can never be evaded, so they correctly never reach
+    // this point at all -- no separate exclusion needed here.
+    if (missed && IsVaultHunterPassiveActiveForBattler(cv->battlerDef, ZERO_PASSIVE_OUTMANEUVER))
+        gBattleStruct->battlerState[cv->battlerDef].movesFirstNextTurn = TRUE;
+
+    return missed;
 }
 
 bool32 IsSemiInvulnerable(enum BattlerId battler, enum SemiInvulnerableExclusion excludeCommander)

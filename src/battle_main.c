@@ -4988,6 +4988,14 @@ s32 GetBattleMovePriority(enum BattlerId battler, enum Ability ability, enum Mov
 {
     s32 priority = 0;
 
+    // 0utmaneOuver (Zer0): after successfully evading an attack, this battler
+    // moves first on its next turn -- even before moves with normal priority.
+    // Checked first and returns immediately, ahead of every other priority rule
+    // in this function, per the spec's explicit wording. +10 safely exceeds any
+    // real move's priority bracket (which tops out well below that).
+    if (gBattleStruct->battlerState[battler].movesFirstNextTurn)
+        return 10;
+
     if (GetActiveGimmick(battler) == GIMMICK_Z_MOVE && !IsBattleMoveStatus(move))
         move = GetUsableZMove(battler, move);
 
@@ -5289,6 +5297,13 @@ static void TurnValuesCleanUp(bool8 var0)
 
             if (gBattleStruct->battlerState[i].isFirstTurn)
                 gBattleStruct->battlerState[i].isFirstTurn--;
+
+            // 0utmaneOuver: this is the same turn-boundary reset point already
+            // proven safe for isFirstTurn just above -- a similar one-shot,
+            // per-turn flag that needs to stay stable throughout this turn's
+            // processing (including however many times turn order gets compared
+            // during sorting) and only clear once that's fully resolved.
+            gBattleStruct->battlerState[i].movesFirstNextTurn = FALSE;
 
             if (gBattleMons[i].volatiles.rechargeTimer)
                 gBattleMons[i].volatiles.rechargeTimer--;
