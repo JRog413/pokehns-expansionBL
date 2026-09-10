@@ -7584,6 +7584,18 @@ static inline uq4_12_t GetCriticalModifier(bool32 isCrit)
     return UQ_4_12(1.0);
 }
 
+// 0ne Sh0t, 0ne Kill (Zer0): -5% critical hit damage at every tier (the chance
+// bonus scales 10/15/20% by tier, but this penalty is a flat, tier-independent
+// -5% per the spec). Kept as a separate modifier applied alongside
+// GetCriticalModifier rather than changing that function's signature, since it's
+// called from two places that don't otherwise need battler context.
+static inline uq4_12_t GetVaultHunterCritDamagePenalty(struct BattleContext *ctx)
+{
+    if (ctx->isCrit && IsVaultHunterPassiveActiveForBattler(ctx->battlerAtk, ZERO_PASSIVE_ONE_SHOT_ONE_KILL))
+        return UQ_4_12(0.95);
+    return UQ_4_12(1.0);
+}
+
 static inline uq4_12_t GetGlaiveRushModifier(enum BattlerId battlerDef)
 {
     if (gBattleMons[battlerDef].volatiles.glaiveRush)
@@ -7935,6 +7947,7 @@ static inline s32 DoMoveDamageCalcVars(struct BattleContext *ctx)
     DAMAGE_APPLY_MODIFIER(GetParentalBondModifier(ctx->battlerAtk));
     DAMAGE_APPLY_MODIFIER(GetWeatherDamageModifier(ctx));
     DAMAGE_APPLY_MODIFIER(GetCriticalModifier(ctx->isCrit));
+    DAMAGE_APPLY_MODIFIER(GetVaultHunterCritDamagePenalty(ctx));
     DAMAGE_APPLY_MODIFIER(GetGlaiveRushModifier(ctx->battlerDef));
 
     if (ctx->randomFactor)
@@ -8091,6 +8104,7 @@ static inline s32 DoFutureSightAttackDamageCalcVars(struct BattleContext *ctx)
     dmg = CalculateBaseDamage(gBattleMovePower, userFinalAttack, partyMonLevel, targetFinalDefense);
 
     DAMAGE_APPLY_MODIFIER(GetCriticalModifier(ctx->isCrit));
+    DAMAGE_APPLY_MODIFIER(GetVaultHunterCritDamagePenalty(ctx));
 
     if (ctx->randomFactor)
     {
@@ -8317,6 +8331,34 @@ static bool32 IsCriticalHit(struct BattleContext *ctx)
         isCrit = RandomChance(RNG_CRITICAL_HIT, GetCriticalHitOdds(critChance), 256);
     else
         isCrit = RandomChance(RNG_CRITICAL_HIT, 1, GetCriticalHitOdds(critChance));
+
+    // 0ne Sh0t, 0ne Kill (Zer0): +10/15/20% crit chance. Applied as a separate,
+    // independent roll on top of the normal crit check above rather than folding
+    // it into the stage system: the spec calls for a flat percentage add, but the
+    // existing stage->odds table (sCriticalHitOdds) jumps in large, uneven steps
+    // (e.g. 1/24 -> 1/8 is roughly +8%, not a clean, tunable amount), so bumping
+    // the stage wouldn't reliably produce "+10%" at every stage. This keeps the
+    // bonus exactly as specified regardless of what stage the hit started at.
+    if (!isCrit
+     && critChance != CRITICAL_HIT_BLOCKED
+     && IsVaultHunterPassiveActiveForBattler(ctx->battlerAtk, ZERO_PASSIVE_ONE_SHOT_ONE_KILL))
+    {
+        u32 bonusPercent = 0;
+        switch (GetVaultHunterPassiveTier())
+        {
+        case 1:
+            bonusPercent = 10;
+            break;
+        case 2:
+            bonusPercent = 15;
+            break;
+        case 3:
+            bonusPercent = 20;
+            break;
+        }
+        if (bonusPercent > 0)
+            isCrit = RandomChance(RNG_CRITICAL_HIT, bonusPercent, 100);
+    }
 
     // Counter for IF_CRITICAL_HITS_GE evolution condition.
     if (isCrit && IsOnPlayerSide(ctx->battlerAtk)
