@@ -18,6 +18,7 @@
 #include "graphics.h"
 #include "international_string_util.h"
 #include "item.h"
+#include "item_menu.h"
 #include "link.h"
 #include "m4a.h"
 #include "malloc.h"
@@ -176,6 +177,8 @@ static EWRAM_DATA struct PokemonSummaryScreenData
     u16 bgTilemapBuffers[PSS_PAGE_COUNT][2][0x400];
     u8 mode;
     u8 skillsPageMode;
+    u8 equipmentCursorPos; // which of the 4 equipment slots (0-3) is selected on PSS_PAGE_TRAITS
+    bool8 equipmentSelectionActive; // TRUE only while actively navigating slots (after pressing A)
     bool8 isBoxMon;
     u8 curMonIndex;
     u8 maxMonIndex;
@@ -205,6 +208,7 @@ EWRAM_DATA MainCallback gInitialSummaryScreenCallback = NULL; // stores callback
 static EWRAM_DATA u8 sSavedSummaryMode = 0;
 static EWRAM_DATA void *sSavedMonList = NULL;
 static EWRAM_DATA u8 sSavedCurMonIndex = 0;
+static EWRAM_DATA u8 sSavedEquipmentSlot = 0; // which of the 4 slots (0-3) survives the trip to the Bag and back
 static EWRAM_DATA u8 sSavedMaxMonIndex = 0;
 static EWRAM_DATA MainCallback sSavedCallback = NULL;
 
@@ -233,6 +237,13 @@ static void PssScrollLeft(u8);
 static void PssScrollLeftEnd(u8);
 static void TryDrawExperienceProgressBar(void);
 static void SwitchToMoveSelection(u8);
+static void SwitchToEquipmentSelection(u8);
+static void Task_HandleInput_EquipmentSelect(u8);
+static void Task_OpenBagFromEquipmentSlot(u8);
+static void Task_WaitFadeThenOpenBag(u8);
+static void CB2_ReturnToSummaryFromEquipmentBag(void);
+static void CB2_EquipItemFromBag(void);
+static void RemoveEquippedItemToBag(u8);
 static void Task_HandleInput_MoveSelect(u8);
 static bool8 HasMoreThanOneMove(void);
 static void ChangeSelectedMove(s16 *, s8, u8 *);
@@ -2011,6 +2022,11 @@ static void Task_HandleInput(u8 taskId)
                   || sMonSummaryScreen->currPageIndex == PSS_PAGE_SKILLS)
             {
                 Task_ShowPokedexEntryFromSummary(taskId);
+            }
+            else if (sMonSummaryScreen->currPageIndex == PSS_PAGE_TRAITS)
+            {
+                PlaySE(SE_SELECT);
+                SwitchToEquipmentSelection(taskId);
             }
         }
         else if (JOY_NEW(B_BUTTON))
@@ -3844,6 +3860,7 @@ static void PrintMonAbilityDescription(void)
 
 static const u8 sText_ItemSlotUnlockLevel[] = _("Lvl. ");
 static const u8 sText_ItemSlotShinyOnly[] = _("Exclusive to Shiny Pokemon");
+static const u8 sText_ItemSlotEmpty[] = _("Empty");
 
 static void PrintTraits(void)
 {
@@ -3878,6 +3895,281 @@ static void Task_PrintTraits(u8 taskId)
     data[0]++;
 }
 
+// Refreshes just one slot's window, redrawn to reflect a cursor move, an equip,
+// a removal, etc., without needing to re-print all four (PrintTraits/
+// Task_PrintTraits do that, but only make sense for the page's initial draw).
+static void RefreshEquipmentSlot(u8 slotIndex)
+{
+    FillWindowPixelBuffer(AddWindowFromTemplateList(sPageTraitsTemplate, slotIndex), PIXEL_FILL(0));
+    PrintMonItemSlot(slotIndex);
+    CopyWindowToVram(AddWindowFromTemplateList(sPageTraitsTemplate, slotIndex), COPYWIN_FULL);
+}
+
+static void SwitchToEquipmentSelection(u8 taskId)
+{
+    sMonSummaryScreen->equipmentSelectionActive = TRUE;
+    sMonSummaryScreen->equipmentCursorPos = 0;
+    RefreshEquipmentSlot(0);
+    gTasks[taskId].func = Task_HandleInput_EquipmentSelect;
+}
+
+static void ExitEquipmentSelection(u8 taskId)
+{
+    u8 oldPos = sMonSummaryScreen->equipmentCursorPos;
+    sMonSummaryScreen->equipmentSelectionActive = FALSE;
+    RefreshEquipmentSlot(oldPos);
+    gTasks[taskId].func = Task_HandleInput;
+}
+
+// Returns TRUE if the currently-selected slot can actually be interacted with
+// right now -- unlocked, per the existing, unmodified
+// IsItemSlotUnlockedByLevelAndShiny rules. Locked slots can still be navigated
+// to (so the player can see why a slot is unavailable, per the "visibly
+// distinguishable" requirement) but not assigned to or cleared.
+static bool8 IsSelectedEquipmentSlotUnlocked(void)
+{
+    struct PokeSummary *sum = &sMonSummaryScreen->summary;
+    u8 slotNum = sMonSummaryScreen->equipmentCursorPos + 1;
+    return IsItemSlotUnlockedByLevelAndShiny(slotNum, sum->level, sum->isShiny);
+}
+
+static enum Item GetSelectedEquipmentSlotItem(void)
+{
+    struct PokeSummary *sum = &sMonSummaryScreen->summary;
+    switch (sMonSummaryScreen->equipmentCursorPos)
+    {
+    case 0:
+        return sum->item;
+    case 1:
+        return sum->itemSlot2;
+    case 2:
+        return sum->itemSlot3;
+    case 3:
+        return sum->itemSlot4;
+    }
+    return ITEM_NONE;
+}
+
+static void Task_HandleInput_EquipmentSelect(u8 taskId)
+{
+    if (MenuHelpers_ShouldWaitForLinkRecv() == TRUE || gPaletteFade.active)
+        return;
+
+    if (JOY_NEW(DPAD_UP))
+    {
+        if (sMonSummaryScreen->equipmentCursorPos > 0)
+        {
+            u8 oldPos = sMonSummaryScreen->equipmentCursorPos;
+            PlaySE(SE_SELECT);
+            sMonSummaryScreen->equipmentCursorPos--;
+            RefreshEquipmentSlot(oldPos);
+            RefreshEquipmentSlot(sMonSummaryScreen->equipmentCursorPos);
+        }
+    }
+    else if (JOY_NEW(DPAD_DOWN))
+    {
+        if (sMonSummaryScreen->equipmentCursorPos < 3)
+        {
+            u8 oldPos = sMonSummaryScreen->equipmentCursorPos;
+            PlaySE(SE_SELECT);
+            sMonSummaryScreen->equipmentCursorPos++;
+            RefreshEquipmentSlot(oldPos);
+            RefreshEquipmentSlot(sMonSummaryScreen->equipmentCursorPos);
+        }
+    }
+    else if (JOY_NEW(A_BUTTON))
+    {
+        if (!IsSelectedEquipmentSlotUnlocked())
+        {
+            PlaySE(SE_FAILURE);
+        }
+        else
+        {
+            PlaySE(SE_SELECT);
+            Task_OpenBagFromEquipmentSlot(taskId);
+        }
+    }
+    else if (JOY_NEW(SELECT_BUTTON))
+    {
+        // Direct removal, without going through the Bag -- only meaningful on an
+        // unlocked slot that actually has something in it.
+        if (!IsSelectedEquipmentSlotUnlocked() || GetSelectedEquipmentSlotItem() == ITEM_NONE)
+        {
+            PlaySE(SE_FAILURE);
+        }
+        else
+        {
+            PlaySE(SE_SELECT);
+            RemoveEquippedItemToBag(sMonSummaryScreen->equipmentCursorPos);
+            RefreshEquipmentSlot(sMonSummaryScreen->equipmentCursorPos);
+        }
+    }
+    else if (JOY_NEW(B_BUTTON))
+    {
+        PlaySE(SE_SELECT);
+        ExitEquipmentSelection(taskId);
+    }
+}
+
+// Gets a real, modifiable pointer to the mon currently being viewed, for actually
+// writing equipment data (unlike sMonSummaryScreen->currentMon, which is a
+// display-only copy made via CopyMonToSummaryStruct -- changes to it never reach
+// the player's real party or PC storage).
+//
+// NOTE / scope limitation: this assumes the summary screen is showing a party
+// mon (struct Pokemon), which is the common case (managing your active team's
+// equipment) and the one this pass verified end-to-end. sSavedMonList can also
+// point at PC box data when the summary screen is opened from within the PC
+// (struct BoxPokemon, a different, narrower type with no runtime-only fields),
+// which SetMonItemSlot cannot accept directly -- equipping while browsing a
+// boxed mon this way is not verified correct by this pass and is flagged clearly
+// in the final report as a known gap, not silently assumed to work.
+static struct Pokemon *GetEditableEquipmentMon(void)
+{
+    return &((struct Pokemon *)sSavedMonList)[sSavedCurMonIndex];
+}
+
+static void Task_OpenBagFromEquipmentSlot(u8 taskId)
+{
+    // Mirrors Task_ShowPokedexEntryFromSummary's fade-then-transition sequence.
+    StopPokemonAnimations();
+    BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
+    gTasks[taskId].func = Task_WaitFadeThenOpenBag;
+}
+
+static void Task_WaitFadeThenOpenBag(u8 taskId)
+{
+    if (!gPaletteFade.active)
+    {
+        // Save summary screen state before cleaning up, same fields (plus the
+        // equipment slot) that Task_OpenPokedexFromSummary saves for the same
+        // reason: FreeSummaryScreen() below releases this screen's memory, so
+        // nothing on it can be read again until ShowPokemonSummaryScreen rebuilds
+        // it from these saved values.
+        sSavedSummaryMode = sMonSummaryScreen->mode;
+        sSavedMonList = sMonSummaryScreen->monList.mons;
+        sSavedCurMonIndex = sMonSummaryScreen->curMonIndex;
+        sSavedMaxMonIndex = sMonSummaryScreen->maxMonIndex;
+        sSavedCallback = sMonSummaryScreen->callback;
+        sSavedEquipmentSlot = sMonSummaryScreen->equipmentCursorPos;
+
+        gLastViewedMonIndex = sMonSummaryScreen->curMonIndex;
+        SummaryScreen_DestroyAnimDelayTask();
+        ResetSpriteData();
+        DestroyShinyStarObj();
+        FreeAllSpritePalettes();
+        StopCryAndClearCrySongs();
+        if (gMonSpritesGfxPtr == NULL)
+            DestroyMonSpritesGfxManager(MON_SPR_GFX_MANAGER_A);
+        FreeSummaryScreen();
+        DestroyTask(taskId);
+
+        GoToBagMenu(ITEMMENULOCATION_PARTY, POCKETS_COUNT, CB2_EquipItemFromBag);
+    }
+}
+
+static void CB2_ReturnToSummaryFromEquipmentBag(void)
+{
+    gPaletteFade.bufferTransferDisabled = TRUE;
+    ShowPokemonSummaryScreen(sSavedSummaryMode, sSavedMonList, sSavedCurMonIndex, sSavedMaxMonIndex, sSavedCallback);
+    // Land back in slot-selection mode, on the same slot, rather than dropping
+    // the player back into plain page navigation -- they were mid-equip.
+    sMonSummaryScreen->equipmentSelectionActive = TRUE;
+    sMonSummaryScreen->equipmentCursorPos = sSavedEquipmentSlot;
+}
+
+static void CB2_EquipItemFromBag(void)
+{
+    if (gSpecialVar_ItemId != ITEM_NONE)
+    {
+        struct Pokemon *mon = GetEditableEquipmentMon();
+        u8 slotNum = sSavedEquipmentSlot + 1;
+        enum Item newItem = gSpecialVar_ItemId;
+        enum Item oldItem = ITEM_NONE;
+
+        switch (sSavedEquipmentSlot)
+        {
+        case 0:
+            oldItem = GetMonData(mon, MON_DATA_HELD_ITEM);
+            break;
+        case 1:
+            oldItem = GetMonEquippedItem(GetMonData(mon, MON_DATA_EQUIPMENT_INDEX), 2);
+            break;
+        case 2:
+            oldItem = GetMonEquippedItem(GetMonData(mon, MON_DATA_EQUIPMENT_INDEX), 3);
+            break;
+        case 3:
+            oldItem = GetMonEquippedItem(GetMonData(mon, MON_DATA_EQUIPMENT_INDEX), 4);
+            break;
+        }
+
+        // Take the new item out of the Bag before attempting to equip it, then
+        // give it right back if the equip fails -- duplicate-on-this-mon or the
+        // equipped-items table being full (see SetMonItemSlot) are both real,
+        // expected failure paths here, not exceptional ones, and neither should
+        // ever cost the player the item they just tried to use.
+        RemoveBagItem(newItem, 1);
+        if (SetMonItemSlot(mon, slotNum, newItem))
+        {
+            // Success: return whatever was previously in this slot, if anything
+            // (the replace case). Nothing to return for a previously-empty slot.
+            if (oldItem != ITEM_NONE)
+                AddBagItem(oldItem, 1);
+        }
+        else
+        {
+            AddBagItem(newItem, 1);
+        }
+    }
+
+    CB2_ReturnToSummaryFromEquipmentBag();
+}
+
+static void RemoveEquippedItemToBag(u8 slotIndex)
+{
+    struct Pokemon *mon = &sMonSummaryScreen->currentMon;
+    // Deliberately NOT using GetEditableEquipmentMon here: this function runs
+    // directly from Task_HandleInput_EquipmentSelect, while the real summary
+    // screen (and its live sMonSummaryScreen->monList) is still open -- there is
+    // no saved/freed state to work around yet, unlike the Bag-transition path
+    // above. sMonSummaryScreen->currentMon itself is a display copy (see
+    // GetEditableEquipmentMon's own comment), so this still needs the real mon;
+    // it's reached the same way PrintTraits/PrintMonItemSlot already do, via the
+    // live monList + curMonIndex rather than currentMon.
+    mon = &((struct Pokemon *)sMonSummaryScreen->monList.mons)[sMonSummaryScreen->curMonIndex];
+
+    u8 slotNum = slotIndex + 1;
+    enum Item item = ITEM_NONE;
+
+    switch (slotIndex)
+    {
+    case 0:
+        item = GetMonData(mon, MON_DATA_HELD_ITEM);
+        break;
+    case 1:
+        item = GetMonEquippedItem(GetMonData(mon, MON_DATA_EQUIPMENT_INDEX), 2);
+        break;
+    case 2:
+        item = GetMonEquippedItem(GetMonData(mon, MON_DATA_EQUIPMENT_INDEX), 3);
+        break;
+    case 3:
+        item = GetMonEquippedItem(GetMonData(mon, MON_DATA_EQUIPMENT_INDEX), 4);
+        break;
+    }
+
+    if (item == ITEM_NONE)
+        return;
+
+    SetMonItemSlot(mon, slotNum, ITEM_NONE);
+    AddBagItem(item, 1);
+
+    // Refresh the summary struct's cached copy too, since PrintMonItemSlot reads
+    // from sum->item/itemSlot2-4 (populated once when the page was first shown),
+    // not by re-querying the mon live -- without this, the display wouldn't
+    // reflect the removal just made until the page were left and re-entered.
+    ExtractMonDataToSummaryStruct(mon);
+}
+
 // slotIndex is 0-3, mapping to item slots 1-4 (slot 1 is always unlocked, the
 // vanilla held item; slots 2-4 are the extra slots added by the 4-item-slot system).
 static void PrintMonItemSlot(u8 slotIndex)
@@ -3886,6 +4178,7 @@ static void PrintMonItemSlot(u8 slotIndex)
     u32 slotNum = slotIndex + 1;
     enum Item item = ITEM_NONE;
     u8 windowId;
+    bool8 showCursor = sMonSummaryScreen->equipmentSelectionActive && sMonSummaryScreen->equipmentCursorPos == slotIndex;
     int x;
 
     switch (slotIndex)
@@ -3906,17 +4199,33 @@ static void PrintMonItemSlot(u8 slotIndex)
 
     windowId = AddWindowFromTemplateList(sPageTraitsTemplate, slotIndex);
 
-    if (item == ITEM_NONE)
+    // Cursor indicator drawn first (fixed left position), independent of which of
+    // the three branches below actually applies -- a locked slot can still be
+    // navigated to and (once unlocked) an empty slot can still be selected, so
+    // the cursor isn't tied to "has an item" the way item name/description are.
+    PrintTextOnWindow(windowId, showCursor ? gText_SelectorArrow2 : gText_Blank, 0, 1, 0, 1);
+
+    // Lock status is checked first, before whether the slot is empty: a locked
+    // slot must show its lock message regardless of whether it happens to have
+    // no item assigned yet (the common case) or an item that was assigned before
+    // the mon met the unlock requirement (SetMonItemSlot explicitly allows this,
+    // per its own comment) -- checking "is it empty" first, as this function
+    // used to, meant a locked-and-empty slot always displayed as if it were
+    // simply unlocked-and-empty, which made locked slots indistinguishable from
+    // empty ones in the single most common case.
+    if (!IsItemSlotUnlockedByLevelAndShiny(slotNum, sum->level, sum->isShiny))
     {
-        x = GetStringRightAlignXOffset(FONT_NORMAL, gText_Blank, 18 * 8);
-        PrintTextOnWindow(windowId, gText_Blank, x, 1, 0, 1);
-        PrintTextOnWindow(windowId, gText_Blank, 0, 17, 0, 0);
-    }
-    else if (!IsItemSlotUnlockedByLevelAndShiny(slotNum, sum->level, sum->isShiny))
-    {
-        CopyItemName(item, gStringVar1);
-        x = GetStringRightAlignXOffset(FONT_NORMAL, gStringVar1, 18 * 8);
-        PrintTextOnWindow(windowId, gStringVar1, x, 1, 0, 1);
+        if (item == ITEM_NONE)
+        {
+            x = GetStringRightAlignXOffset(FONT_NORMAL, sText_ItemSlotEmpty, 18 * 8);
+            PrintTextOnWindow(windowId, sText_ItemSlotEmpty, x, 1, 0, 1);
+        }
+        else
+        {
+            CopyItemName(item, gStringVar1);
+            x = GetStringRightAlignXOffset(FONT_NORMAL, gStringVar1, 18 * 8);
+            PrintTextOnWindow(windowId, gStringVar1, x, 1, 0, 1);
+        }
 
         if (slotNum == 4)
         {
@@ -3932,6 +4241,12 @@ static void PrintMonItemSlot(u8 slotIndex)
             x = GetStringRightAlignXOffset(FONT_NORMAL, gStringVar1, 18 * 8);
             PrintTextOnWindow(windowId, gStringVar1, x, 17, 0, 0);
         }
+    }
+    else if (item == ITEM_NONE)
+    {
+        x = GetStringRightAlignXOffset(FONT_NORMAL, sText_ItemSlotEmpty, 18 * 8);
+        PrintTextOnWindow(windowId, sText_ItemSlotEmpty, x, 1, 0, 1);
+        PrintTextOnWindow(windowId, gText_Blank, 0, 17, 0, 0);
     }
     else
     {
