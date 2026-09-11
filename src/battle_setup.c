@@ -1,5 +1,6 @@
 #include "global.h"
 #include "battle.h"
+#include "pokemon_storage_system.h"
 #include "bug_contest.h"
 #include "load_save.h"
 #include "battle_setup.h"
@@ -1234,10 +1235,46 @@ void ChooseStarter(void)
 static void CB2_GiveStarter(void)
 {
     u16 starterMon;
+    u32 giveResult;
 
     *GetVarPointer(VAR_STARTER_MON) = gSpecialVar_Result;
     starterMon = GetStarterPokemon(gSpecialVar_Result);
-    ScriptGiveMon(starterMon, 5, ITEM_NONE);
+    giveResult = ScriptGiveMon(starterMon, 5, ITEM_NONE);
+
+    // Force the starter genuinely shiny, using this game's existing, real
+    // shiny-generation mechanism (MON_DATA_IS_SHINY's setter computes the exact
+    // shinyModifier bit needed so the mon's actual, natural personality/OT-based
+    // shiny check comes out shiny -- this is not a display flag, it's the same
+    // mechanism every other genuinely shiny mon in this game already relies on).
+    //
+    // Applied here, after ScriptGiveMon returns, rather than inside that shared
+    // function: ScriptGiveMon is also called by the debug give-mon menu, and
+    // forcing shiny inside it would make every debug-given mon shiny too. This
+    // keeps the guarantee scoped to exactly this call site -- the one and only
+    // place the player's actual starter gets created and given.
+    //
+    // ScriptGiveMon's return value is checked (rather than assuming the mon
+    // landed in gPlayerParty[0]) to correctly find it even in the edge case
+    // where GiveScriptedMonToPlayer sent it to PC storage instead (e.g. a
+    // One Type Challenge run where the randomized starter's type doesn't match
+    // the challenge's chosen type) -- MON_DATA_IS_SHINY works identically via
+    // SetBoxMonData for a PC-stored mon as it does via SetMonData for a party one.
+    if (giveResult == MON_GIVEN_TO_PARTY)
+    {
+        // The very first Pokemon given on a brand new game always lands in the
+        // first party slot -- CB2_GiveStarter only ever runs once, immediately
+        // after a fresh save's starter-choice screen, with a guaranteed-empty
+        // party at this point.
+        SetMonData(&gPlayerParty[0], MON_DATA_IS_SHINY, &(u32){TRUE});
+    }
+    else if (giveResult == MON_GIVEN_TO_PC)
+    {
+        struct BoxPokemon *boxMon = GetBoxedMonPtr(gSpecialVar_MonBoxId, gSpecialVar_MonBoxPos);
+        SetBoxMonData(boxMon, MON_DATA_IS_SHINY, &(u32){TRUE});
+    }
+    // MON_CANT_GIVE (both party and every PC box completely full) means the mon
+    // was never actually given anywhere -- nothing to mark shiny in that case.
+
     ResetTasks();
     PlayBattleBGM();
     SetMainCallback2(CB2_StartFirstBattle);
