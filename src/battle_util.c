@@ -5556,7 +5556,17 @@ bool32 CanSetNonVolatileStatus(enum BattlerId battlerAtk, enum BattlerId battler
     }
     else if (gBattleMons[battlerDef].status1 & STATUS1_ANY)
     {
-        battleScript = BattleScript_ButItFailed;
+        // Ruin (Maya): per the spec, a Ruin activation "can replace/override the
+        // target's existing primary status" -- but without this check, that
+        // branch could never actually happen, since this exact "already has a
+        // status" block would fail the move before TryActivateVaultHunterRuin
+        // (hooked later, in SetNonVolatileStatus) ever got a chance to run.
+        // Rolling the override chance here, and only bypassing the block on
+        // success, is what makes that branch of the spec real rather than
+        // unreachable. See TryActivateVaultHunterRuin's own comment for why it
+        // doesn't re-roll when this path is the reason it got called.
+        if (!TryVaultHunterRuinStatusOverride(battlerAtk, battlerDef))
+            battleScript = BattleScript_ButItFailed;
     }
 
     if (IsNonVolatileStatusBlocked(battlerDef, abilityDef, abilityAffected, battleScript, option))

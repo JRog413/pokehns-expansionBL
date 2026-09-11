@@ -43,6 +43,12 @@ u8 GetActiveVaultHunterPassiveSlot(void); // PASSIVE_SLOT_NONE if nothing active
 bool32 SetActiveVaultHunterPassiveSlot(u8 slot); // fails (returns FALSE) if that slot isn't unlocked
 bool32 IsVaultHunterPassiveActive(u8 slot); // convenience: unlocked AND currently selected
 bool32 IsVaultHunterPassiveActiveForBattler(u8 battler, u8 slot);
+
+// Ruin (Maya): called from SetNonVolatileStatus right after a primary status is
+// actually applied. See its own doc comment in vault_hunter.c for the exact
+// contract around targetHadStatusBefore.
+bool32 TryVaultHunterRuinStatusOverride(u8 attacker, u8 target);
+void TryActivateVaultHunterRuin(u8 attacker, u8 target, bool32 targetHadStatusBefore);
 void UnlockVaultHunterPassive(u8 slot);
 void SetVaultHunterPassiveTier(u8 tier);
 

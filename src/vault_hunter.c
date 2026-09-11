@@ -212,3 +212,221 @@ void TryAdvanceVaultHunterPassivesForBadge(u8 badgeNumber)
         break; // badges 2, 6, 7 (and anything outside 1-8) don't affect passives
     }
 }
+
+// --- Ruin (Maya): status-triggered secondary effect system. ---
+//
+// Each secondary effect is a simple apply/clear function pair. This is the part
+// of the design meant to stay expandable: adding a new secondary effect later
+// means writing one apply function, one clear function, and adding one line to
+// sRuinSecondaryEffects below -- nothing else in this file needs to change to
+// support it.
+//
+// "clear" exists specifically so a later Ruin activation can cleanly remove
+// whichever effect it previously applied before applying a new one (per the spec:
+// max one secondary effect at a time, and a new one replaces the old). It only
+// touches state Ruin itself tracks having set (see ruinSecondaryEffect on
+// BattlerState) -- it never clears a volatile that arose from an unrelated,
+// ordinary move, since that's not Ruin's to touch.
+
+static void RuinApplyConfusion(u8 attacker, u8 target)
+{
+    if (!gBattleMons[target].volatiles.confusionTurns)
+        gBattleMons[target].volatiles.confusionTurns = RandomUniform(RNG_CONFUSION_TURNS, 2, B_CONFUSION_TURNS);
+}
+static void RuinClearConfusion(u8 target)
+{
+    gBattleMons[target].volatiles.confusionTurns = 0;
+}
+
+static void RuinApplyInfatuation(u8 attacker, u8 target)
+{
+    if (!gBattleMons[target].volatiles.infatuation)
+        gBattleMons[target].volatiles.infatuation = INFATUATED_WITH(attacker);
+}
+static void RuinClearInfatuation(u8 target)
+{
+    gBattleMons[target].volatiles.infatuation = 0;
+}
+
+static void RuinApplyDisable(u8 attacker, u8 target)
+{
+    u32 i;
+    if (gBattleMons[target].volatiles.disabledMove != MOVE_NONE)
+        return;
+    for (i = 0; i < MAX_MON_MOVES; i++)
+    {
+        if (gBattleMons[target].moves[i] == gLastMoves[target])
+            break;
+    }
+    // If the target's last move isn't found (e.g. it hasn't moved yet this
+    // battle) or is already out of PP, there's nothing valid to disable --
+    // Ruin's activation still happened (the status landed), it simply has
+    // nothing to attach this particular secondary effect to this time.
+    if (i == MAX_MON_MOVES || gBattleMons[target].pp[i] == 0)
+        return;
+    gBattleMons[target].volatiles.disabledMove = gBattleMons[target].moves[i];
+    gBattleMons[target].volatiles.disableTimer = B_DISABLE_TIMER;
+}
+static void RuinClearDisable(u8 target)
+{
+    gBattleMons[target].volatiles.disabledMove = MOVE_NONE;
+    gBattleMons[target].volatiles.disableTimer = 0;
+}
+
+static void RuinApplyTrap(u8 attacker, u8 target)
+{
+    if (!gBattleMons[target].volatiles.wrapped)
+    {
+        gBattleMons[target].volatiles.wrapped = TRUE;
+        gBattleMons[target].volatiles.wrappedMove = MOVE_NONE; // not tied to a specific move
+        gBattleMons[target].volatiles.wrappedBy = attacker;
+    }
+}
+static void RuinClearTrap(u8 target)
+{
+    gBattleMons[target].volatiles.wrapped = FALSE;
+}
+
+static void RuinApplyLeechSeed(u8 attacker, u8 target)
+{
+    if (!gBattleMons[target].volatiles.leechSeed && !IS_BATTLER_OF_TYPE(target, TYPE_GRASS))
+        gBattleMons[target].volatiles.leechSeed = LEECHSEEDED_BY(attacker);
+}
+static void RuinClearLeechSeed(u8 target)
+{
+    gBattleMons[target].volatiles.leechSeed = 0;
+}
+
+static void RuinApplyEncore(u8 attacker, u8 target)
+{
+    u32 i;
+    if (gBattleMons[target].volatiles.encoreTimer)
+        return;
+    for (i = 0; i < MAX_MON_MOVES; i++)
+    {
+        if (gBattleMons[target].moves[i] == gLastMoves[target])
+            break;
+    }
+    if (i == MAX_MON_MOVES || gBattleMons[target].pp[i] == 0)
+        return; // nothing valid to Encore into this time -- see RuinApplyDisable
+    gBattleMons[target].volatiles.encoredMove = gBattleMons[target].moves[i];
+    gBattleMons[target].volatiles.encoredMovePos = i;
+    gBattleMons[target].volatiles.encoreTimer = B_ENCORE_TIMER;
+}
+static void RuinClearEncore(u8 target)
+{
+    gBattleMons[target].volatiles.encoredMove = MOVE_NONE;
+    gBattleMons[target].volatiles.encoreTimer = 0;
+}
+
+static void RuinApplyTaunt(u8 attacker, u8 target)
+{
+    if (!gBattleMons[target].volatiles.tauntTimer)
+        gBattleMons[target].volatiles.tauntTimer = 3;
+}
+static void RuinClearTaunt(u8 target)
+{
+    gBattleMons[target].volatiles.tauntTimer = 0;
+}
+
+struct RuinSecondaryEffect
+{
+    void (*apply)(u8 attacker, u8 target);
+    void (*clear)(u8 target);
+};
+
+// Index 0 is deliberately unused (BattlerState.ruinSecondaryEffect == 0 means "no
+// effect active"), so real effects start at index 1 -- see RuinTryActivate below,
+// which picks a random index in [1, ARRAY_COUNT) rather than [0, ARRAY_COUNT).
+static const struct RuinSecondaryEffect sRuinSecondaryEffects[] =
+{
+    [0] = { NULL, NULL },
+    { RuinApplyConfusion, RuinClearConfusion },
+    { RuinApplyInfatuation, RuinClearInfatuation },
+    { RuinApplyDisable, RuinClearDisable },
+    { RuinApplyTrap, RuinClearTrap },
+    { RuinApplyLeechSeed, RuinClearLeechSeed },
+    { RuinApplyEncore, RuinClearEncore },
+    { RuinApplyTaunt, RuinClearTaunt },
+};
+
+// Called from SetNonVolatileStatus right after a primary status has actually been
+// applied to `target`. `targetHadStatusBefore` must reflect the target's status
+// immediately before this infliction (the tiered activation chance depends on it),
+// so the caller captures that before calling SetNonVolatileStatus's status-setting
+// switch, not after.
+// Applies (or replaces) Ruin's secondary effect on `target`. Shared by both
+// activation entry points below.
+static void ApplyRuinSecondaryEffect(u8 attacker, u8 target)
+{
+    u8 previousEffect = gBattleStruct->battlerState[target].ruinSecondaryEffect;
+    if (previousEffect != 0)
+        sRuinSecondaryEffects[previousEffect].clear(target);
+
+    u8 newEffect = 1 + (Random() % (ARRAY_COUNT(sRuinSecondaryEffects) - 1));
+    sRuinSecondaryEffects[newEffect].apply(attacker, target);
+    gBattleStruct->battlerState[target].ruinSecondaryEffect = newEffect;
+}
+
+// The tiered activation chance itself (10/15/20% with no existing status,
+// 15/20/25% with one), shared by both entry points so the two percentages only
+// ever live in one place. Returns 0 if Ruin isn't active for `attacker` or
+// nothing is unlocked yet, which the callers below both treat as "never rolls".
+static u32 GetRuinActivationChance(u8 attacker, bool32 targetHadStatusBefore)
+{
+    if (!IsVaultHunterPassiveActiveForBattler(attacker, MAYA_PASSIVE_RUIN))
+        return 0;
+
+    switch (GetVaultHunterPassiveTier())
+    {
+    case 1:
+        return targetHadStatusBefore ? 15 : 10;
+    case 2:
+        return targetHadStatusBefore ? 20 : 15;
+    case 3:
+        return targetHadStatusBefore ? 25 : 20;
+    default:
+        return 0;
+    }
+}
+
+// Called from CanSetNonVolatileStatus's "target already has a primary status"
+// check -- the only place that can actually decide whether this status is
+// allowed to override the existing one, since without this, that check fails
+// the move before SetNonVolatileStatus (and TryActivateVaultHunterRuin below)
+// ever runs at all, making the spec's "can replace/override" branch permanently
+// unreachable. This IS the roll for that branch -- on success, the secondary
+// effect is applied immediately, since this is the only point that will ever
+// get to decide this particular activation.
+bool32 TryVaultHunterRuinStatusOverride(u8 attacker, u8 target)
+{
+    u32 chance = GetRuinActivationChance(attacker, TRUE);
+    if (chance == 0 || !RandomPercentage(RNG_NONE, chance))
+        return FALSE;
+
+    ApplyRuinSecondaryEffect(attacker, target);
+    return TRUE;
+}
+
+// Called from SetNonVolatileStatus right after a primary status has actually been
+// applied to `target`. `targetHadStatusBefore` must reflect the target's status
+// immediately before this infliction, so the caller captures that before calling
+// SetNonVolatileStatus's status-setting switch, not after.
+//
+// Deliberately does NOT roll again when targetHadStatusBefore is TRUE: the only
+// way execution reaches here with a prior status is if
+// TryVaultHunterRuinStatusOverride already rolled and succeeded -- otherwise
+// CanSetNonVolatileStatus would have blocked the move before this function was
+// ever called. Rolling a second time here would silently square the real
+// activation probability instead of applying the spec's actual percentages.
+void TryActivateVaultHunterRuin(u8 attacker, u8 target, bool32 targetHadStatusBefore)
+{
+    if (targetHadStatusBefore)
+        return; // already rolled and applied by TryVaultHunterRuinStatusOverride
+
+    u32 chance = GetRuinActivationChance(attacker, FALSE);
+    if (chance == 0 || !RandomPercentage(RNG_NONE, chance))
+        return;
+
+    ApplyRuinSecondaryEffect(attacker, target);
+}

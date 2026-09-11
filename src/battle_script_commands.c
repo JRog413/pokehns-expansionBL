@@ -1,5 +1,6 @@
 #include "global.h"
 #include "battle.h"
+#include "vault_hunter.h"
 #include "battle_hold_effects.h"
 #include "battle_message.h"
 #include "battle_anim.h"
@@ -2301,6 +2302,11 @@ static void SetNonVolatileStatus(enum BattlerId effectBattler, enum MoveEffect e
 {
     gEffectBattler = effectBattler;
 
+    // Captured before anything below modifies status1: Ruin's activation chance
+    // depends on whether the target already had a primary status immediately
+    // before this particular infliction, not after.
+    bool32 hadStatusBefore = (gBattleMons[effectBattler].status1 & STATUS1_ANY) != 0;
+
     if (effect == MOVE_EFFECT_SLEEP
      || effect == MOVE_EFFECT_FREEZE)
     {
@@ -2351,6 +2357,12 @@ static void SetNonVolatileStatus(enum BattlerId effectBattler, enum MoveEffect e
     default:
         break;
     }
+
+    // Ruin (Maya): only on move-inflicted status (not e.g. an ability like Static
+    // reacting to contact), matching the spec's "Maya's Pokemon inflicts a status"
+    // framing -- gBattlerAttacker is the one who actively used the move here.
+    if (trigger == TRIGGER_ON_MOVE)
+        TryActivateVaultHunterRuin(gBattlerAttacker, effectBattler, hadStatusBefore);
 
     BtlController_EmitSetMonData(effectBattler, B_COMM_TO_CONTROLLER, REQUEST_STATUS_BATTLE, 0, sizeof(gBattleMons[effectBattler].status1), &gBattleMons[effectBattler].status1);
     MarkBattlerForControllerExec(effectBattler);

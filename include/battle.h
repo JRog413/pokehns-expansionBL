@@ -513,7 +513,15 @@ struct BattlerState
     // over even normal-priority moves. Repurposes what was padding, so this costs
     // nothing extra -- same reasoning as isFirstTurn/cheatingDeathCounter above.
     u16 movesFirstNextTurn:1;
-    u16 padding:9;
+    // Ruin (Maya): which secondary effect (if any) Ruin currently has active on
+    // this battler, as an index into sRuinSecondaryEffects in vault_hunter.c, so a
+    // later Ruin activation knows exactly which one to clear before applying a new
+    // one. 0 = none active. Tracked separately from the underlying volatile status
+    // fields themselves (confusionTurns etc.) since those can also be set by
+    // ordinary moves unrelated to Ruin -- this only needs to know about Ruin's own
+    // prior application, not overwrite bookkeeping for a naturally-occurring one.
+    u16 ruinSecondaryEffect:3;
+    u16 padding:6;
 };
 
 struct PartyState
