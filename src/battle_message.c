@@ -470,6 +470,12 @@ const u8 *const gBattleStringsTable[STRINGID_COUNT] =
     [STRINGID_PKMNSITEMRESTOREDSTATUS]              = COMPOUND_STRING("{B_SCR_NAME_WITH_PREFIX} returned its stats to normal using its {B_LAST_ITEM}!"),
     [STRINGID_PKMNSITEMRESTOREDHPALITTLE]           = COMPOUND_STRING("{B_SCR_NAME_WITH_PREFIX} restored a little HP using its {B_LAST_ITEM}!"),
     [STRINGID_VAULTHUNTERSOULHARVESTHEAL]           = COMPOUND_STRING("{B_ATK_NAME_WITH_PREFIX} drained some HP with Soul Harvest!"),
+    [STRINGID_VAULTHUNTERSOULHARVESTPROC]           = COMPOUND_STRING("Soul Harvest!"),
+    [STRINGID_VAULTHUNTERONESHOTONEKILL]            = COMPOUND_STRING("0ne Sh0t 0ne Kill!"),
+    [STRINGID_VAULTHUNTEROUTMANEUVER]               = COMPOUND_STRING("0utmaneOuver!"),
+    [STRINGID_VAULTHUNTEROVERKILL]                  = COMPOUND_STRING("0verkill!"),
+    [STRINGID_VAULTHUNTERPHASESHIELD]               = COMPOUND_STRING("Phase Shield!"),
+    [STRINGID_VAULTHUNTERRUIN]                      = COMPOUND_STRING("Ruin!"),
     [STRINGID_ITEMALLOWSONLYYMOVE]                  = COMPOUND_STRING("{B_LAST_ITEM} only allows the use of {B_CURRENT_MOVE}!\p"),
     [STRINGID_PKMNHUNGONWITHX]                      = COMPOUND_STRING("{B_DEF_NAME_WITH_PREFIX} hung on using its {B_LAST_ITEM}!"),
     [STRINGID_EMPTYSTRING3]                         = gText_EmptyString3,
@@ -1006,6 +1012,20 @@ const u16 gNoEscapeStringIds[] =
     [B_MSG_PREVENTS_ESCAPE]      = STRINGID_PREVENTSESCAPE,
     [B_MSG_CANT_ESCAPE_2]        = STRINGID_CANTESCAPE2,
     [B_MSG_ATTACKER_CANT_ESCAPE] = STRINGID_ATTACKERCANTESCAPE
+};
+
+// Indexed by gBattleCommunication[MULTISTRING_CHOOSER], set by
+// PrintVaultHunterPassiveMessage (battle_move_resolution.c) before calling
+// BattleScript_VaultHunterPassiveMessage. Soul Harvest isn't here -- it has its
+// own separate, always-safe direct trigger point and doesn't need this shared,
+// deferred-to-MoveEnd mechanism.
+const u16 gVaultHunterPassiveMessageIds[] =
+{
+    [0] = STRINGID_VAULTHUNTERONESHOTONEKILL,
+    [1] = STRINGID_VAULTHUNTEROUTMANEUVER,
+    [2] = STRINGID_VAULTHUNTEROVERKILL,
+    [3] = STRINGID_VAULTHUNTERRUIN,
+    [4] = STRINGID_VAULTHUNTERPHASESHIELD,
 };
 
 const u16 gMoveWeatherChangeStringIds[] =

@@ -2083,6 +2083,65 @@ static enum MoveEndResult MoveEndSetValues(void)
     return MOVEEND_RESULT_CONTINUE;
 }
 
+// Displays a short battle announcement for whichever of the five "calc-time"
+// Vault Hunter passives (0ne Sh0t 0ne Kill, 0utmaneOuver, 0verkill, Ruin, Phase
+// Shield) actually applied its effect on this move -- flagged via
+// vaultHunterMessagePending at each real trigger point (see battle_util.c and
+// vault_hunter.c), since those points aren't safe places to call into the
+// message system directly. Soul Harvest isn't handled here: it already has its
+// own separate, always-safe trigger and prints its own message directly.
+//
+// Checks every battler since the passive can trigger from either side of this
+// move (attacker-side for the first three and Ruin, defender-side for
+// 0utmaneOuver's dodge and Phase Shield), but only ever surfaces one message per
+// invocation even if, in some rare edge case (e.g. a spread move that also hits
+// the user's own ally in a double battle), more than one battler's flag ends up
+// set at once -- calling BattleScriptCall more than once in a single MoveEnd
+// invocation isn't a safe assumption to make, and this handler only runs once
+// per move, so a second simultaneous trigger simply doesn't get its own
+// announcement rather than risk an unsafe double-call.
+static enum MoveEndResult MoveEndVaultHunterPassiveMessage(void)
+{
+    enum MoveEndResult result = MOVEEND_RESULT_CONTINUE;
+    u32 battler;
+
+    for (battler = 0; battler < gBattlersCount; battler++)
+    {
+        if (gBattleStruct->battlerState[battler].vaultHunterMessagePending)
+        {
+            gBattleStruct->battlerState[battler].vaultHunterMessagePending = FALSE;
+
+            s32 messageIndex = -1;
+            switch (GetActiveVaultHunterPassiveSlot())
+            {
+            case VH_PASSIVE_SLOT_0:
+                // Maya's slot 0 (Soul Harvest) never sets this flag in the first
+                // place -- see the function comment above -- so slot 0 only ever
+                // means 0ne Sh0t 0ne Kill here.
+                messageIndex = 0;
+                break;
+            case VH_PASSIVE_SLOT_1:
+                messageIndex = (GetVaultHunterId() == VAULT_HUNTER_ZERO) ? 1 : 3; // 0utmaneOuver : Ruin
+                break;
+            case VH_PASSIVE_SLOT_2:
+                messageIndex = (GetVaultHunterId() == VAULT_HUNTER_ZERO) ? 2 : 4; // 0verkill : Phase Shield
+                break;
+            }
+
+            if (messageIndex >= 0)
+            {
+                gBattleCommunication[MULTISTRING_CHOOSER] = messageIndex;
+                BattleScriptCall(BattleScript_VaultHunterPassiveMessage);
+                result = MOVEEND_RESULT_RUN_SCRIPT;
+            }
+            break;
+        }
+    }
+
+    gBattleScripting.moveendState++;
+    return result;
+}
+
 static enum MoveEndResult MoveEndProtectLikeEffect(void)
 {
     enum MoveEndResult result = MOVEEND_RESULT_CONTINUE;
@@ -3907,6 +3966,7 @@ static enum MoveEndResult MoveEndPursuitNextAction(void)
 static enum MoveEndResult (*const sMoveEndHandlers[])(void) =
 {
     [MOVEEND_SET_VALUES] = MoveEndSetValues,
+    [MOVEEND_VAULT_HUNTER_PASSIVE_MESSAGE] = MoveEndVaultHunterPassiveMessage,
     [MOVEEND_PROTECT_LIKE_EFFECT] = MoveEndProtectLikeEffect,
     [MOVEEND_ABSORB] = MoveEndAbsorb,
     [MOVEEND_RAGE] = MoveEndRage,

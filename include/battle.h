@@ -521,7 +521,18 @@ struct BattlerState
     // ordinary moves unrelated to Ruin -- this only needs to know about Ruin's own
     // prior application, not overwrite bookkeeping for a naturally-occurring one.
     u16 ruinSecondaryEffect:3;
-    u16 padding:6;
+    // Set whenever one of the Vault Hunter passives whose trigger point is deep
+    // inside damage/accuracy calculation (0ne Sh0t 0ne Kill, 0utmaneOuver's dodge,
+    // 0verkill, Phase Shield) actually applies its effect on this battler. A
+    // single shared flag is enough since only one passive can ever be active at a
+    // time -- whichever one is currently active is unambiguous from
+    // GetActiveVaultHunterPassiveSlot() by the time this gets checked and cleared
+    // in PrintVaultHunterPassiveMessage (battle_move_resolution.c), a new MoveEnd
+    // handler chosen specifically because it's a safe point to print a message
+    // (unlike calling into the message system mid-calculation, before this
+    // battler's move has even finished resolving).
+    u16 vaultHunterMessagePending:1;
+    u16 padding:5;
 };
 
 struct PartyState

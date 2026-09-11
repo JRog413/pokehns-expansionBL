@@ -7178,6 +7178,8 @@ BattleScript_ItemHealHP_Ret::
 	return
 
 BattleScript_VaultHunterSoulHarvestRet::
+	printstring STRINGID_VAULTHUNTERSOULHARVESTPROC
+	waitmessage B_WAIT_TIME_LONG
 	printstring STRINGID_VAULTHUNTERSOULHARVESTHEAL
 	waitmessage B_WAIT_TIME_LONG
 	healthbarupdate BS_ATTACKER, PASSIVE_HP_UPDATE
@@ -7187,6 +7189,15 @@ BattleScript_VaultHunterSoulHarvestRet::
 BattleScript_VaultHunterSoulHarvest::
 	call BattleScript_VaultHunterSoulHarvestRet
 	end2
+
+@ Shared by 0ne Sh0t 0ne Kill, 0utmaneOuver, 0verkill, Ruin, and Phase Shield --
+@ their C-side trigger points (see PrintVaultHunterPassiveMessage in
+@ battle_move_resolution.c) set gBattleCommunication[MULTISTRING_CHOOSER] to
+@ pick the right entry from gVaultHunterPassiveMessageIds before calling this.
+BattleScript_VaultHunterPassiveMessage::
+	printfromtable gVaultHunterPassiveMessageIds
+	waitmessage B_WAIT_TIME_LONG
+	return
 
 BattleScript_SelectingNotAllowedMoveChoiceItem::
 	printselectionstring STRINGID_ITEMALLOWSONLYYMOVE

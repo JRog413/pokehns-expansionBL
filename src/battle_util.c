@@ -7602,7 +7602,10 @@ static inline uq4_12_t GetCriticalModifier(bool32 isCrit)
 static inline uq4_12_t GetVaultHunterCritDamagePenalty(struct BattleContext *ctx)
 {
     if (ctx->isCrit && IsVaultHunterPassiveActiveForBattler(ctx->battlerAtk, ZERO_PASSIVE_ONE_SHOT_ONE_KILL))
+    {
+        gBattleStruct->battlerState[ctx->battlerAtk].vaultHunterMessagePending = TRUE;
         return UQ_4_12(0.95);
+    }
     return UQ_4_12(1.0);
 }
 
@@ -7870,6 +7873,8 @@ static inline uq4_12_t GetVaultHunterPassiveModifier(struct BattleContext *ctx)
                 modifier = uq4_12_multiply(modifier, UQ_4_12(1.15));
                 break;
             }
+            if (GetVaultHunterPassiveTier() != 0)
+                gBattleStruct->battlerState[ctx->battlerAtk].vaultHunterMessagePending = TRUE;
         }
     }
 
@@ -7891,6 +7896,8 @@ static inline uq4_12_t GetVaultHunterPassiveModifier(struct BattleContext *ctx)
                 modifier = uq4_12_multiply(modifier, UQ_4_12(0.90));
                 break;
             }
+            if (GetVaultHunterPassiveTier() != 0)
+                gBattleStruct->battlerState[ctx->battlerDef].vaultHunterMessagePending = TRUE;
         }
     }
 
@@ -10938,7 +10945,10 @@ bool32 DoesMoveMissTarget(struct BattleCalcValues *cv)
     // CanMoveSkipAccuracyCalc) can never be evaded, so they correctly never reach
     // this point at all -- no separate exclusion needed here.
     if (missed && IsVaultHunterPassiveActiveForBattler(cv->battlerDef, ZERO_PASSIVE_OUTMANEUVER))
+    {
         gBattleStruct->battlerState[cv->battlerDef].movesFirstNextTurn = TRUE;
+        gBattleStruct->battlerState[cv->battlerDef].vaultHunterMessagePending = TRUE;
+    }
 
     return missed;
 }

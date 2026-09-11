@@ -366,6 +366,15 @@ static void ApplyRuinSecondaryEffect(u8 attacker, u8 target)
     u8 newEffect = 1 + (Random() % (ARRAY_COUNT(sRuinSecondaryEffects) - 1));
     sRuinSecondaryEffects[newEffect].apply(attacker, target);
     gBattleStruct->battlerState[target].ruinSecondaryEffect = newEffect;
+
+    // Message flag set on the attacker (Ruin's owner), not the target -- matches
+    // the other attacker-side passives (0ne Sh0t 0ne Kill, 0verkill), and is
+    // picked up and displayed later by PrintVaultHunterPassiveMessage
+    // (battle_move_resolution.c), a safe MoveEnd-boundary point, rather than
+    // calling into the message system directly from here -- this function can be
+    // reached from CanSetNonVolatileStatus, which runs mid script-command
+    // execution, not at a clean boundary.
+    gBattleStruct->battlerState[attacker].vaultHunterMessagePending = TRUE;
 }
 
 // The tiered activation chance itself (10/15/20% with no existing status,

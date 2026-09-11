@@ -210,6 +210,7 @@ extern const u8 BattleScript_BerryPPHeal[];
 extern const u8 BattleScript_ItemHealHP_End2[];
 extern const u8 BattleScript_ItemHealHP_Ret[];
 extern const u8 BattleScript_VaultHunterSoulHarvestRet[];
+extern const u8 BattleScript_VaultHunterPassiveMessage[];
 extern const u8 BattleScript_VaultHunterSoulHarvest[];
 extern const u8 BattleScript_SelectingNotAllowedMoveChoiceItem[];
 extern const u8 BattleScript_SelectingNotAllowedMoveChoiceItemInPalace[];
