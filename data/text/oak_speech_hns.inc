@@ -29,8 +29,13 @@ gText_Oak_AndYouAre::
 	.string "And you are?$"
 
 gText_Oak_BoyOrGirl::
-	.string "Are you a boy?\n"
-	.string "Or are you a girl?$"
+	.string "Which Vault Hunter are you?$"
+
+gText_VaultHunterZero::
+	.string "ZER0$"
+
+gText_VaultHunterMaya::
+	.string "MAYA$"
 
 gText_Oak_WhatChallenge::
 	.string "What challenge are you\n"

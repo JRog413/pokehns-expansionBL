@@ -42,6 +42,8 @@ extern const u8 gText_Oak_Welcome[];
 extern const u8 gText_Oak_MainSpeech[];
 extern const u8 gText_Oak_AndYouAre[];
 extern const u8 gText_Oak_BoyOrGirl[];
+extern const u8 gText_VaultHunterZero[];
+extern const u8 gText_VaultHunterMaya[];
 extern const u8 gText_Oak_WhatChallenge[];
 extern const u8 gText_Oak_ChallengeSelected[];
 extern const u8 gText_Oak_WhatsYourName[];
@@ -202,8 +204,8 @@ static const union AffineAnimCmd *const sSpriteAffineAnimTable_PlayerShrink[] =
 };
 
 static const struct MenuAction sMenuActions_Gender[] = {
-    {gText_Boy, {NULL}},
-    {gText_Girl, {NULL}}
+    {gText_VaultHunterZero, {NULL}},
+    {gText_VaultHunterMaya, {NULL}}
 };
 
 static const u8 *const sMalePresetNames[] = {
